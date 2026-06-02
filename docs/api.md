@@ -268,6 +268,143 @@ Checks a cloud-drive share link and returns normalized status information.
 | `502` | `telegram_reply_failed` | Telegram reply operation failed |
 | `500` | `http_client_error` | Internal HTTP client initialization failed |
 
+### `POST /api/115/share/list`
+
+Fetches a 115 share's file listing.
+
+Supported 115 share domains currently include `115.com`, `115cdn.com`, and `anxia.com`.
+
+#### Request Body
+
+```json
+{
+  "url": "https://115cdn.com/s/swfsfjg3h7i?password=l3a6",
+  "list_type": "files"
+}
+```
+
+#### `list_type` values
+
+| Value | Meaning |
+| --- | --- |
+| `files` | Return only files with full paths |
+| `tree` | Preserve folder structure and return a tree |
+
+#### Example: `files` response
+
+```json
+{
+  "original_url": "https://115cdn.com/s/swfsfjg3h7i?password=l3a6",
+  "normalized_url": "https://115cdn.com/s/swfsfjg3h7i?password=l3a6",
+  "provider": "pan115",
+  "list_type": "files",
+  "share_code": "swfsfjg3h7i",
+  "receive_code": "l3a6",
+  "share_title": "记录的地平线 ログ・ホライズン 4K.60fps(2013)",
+  "share_state": 1,
+  "share_state_label": "normal",
+  "file_count": 62,
+  "result_type": "files",
+  "files": [
+    {
+      "fid": "3332139128892875513",
+      "parent_cid": "3332132737553719669",
+      "name": "[Vcb-Studio] Log Horizon [01][Ma10p 2160P 60Fps][X265 Flac Aac]@Feimao.mkv",
+      "path": "记录的地平线 ログ・ホライズン 4K.60fps(2013)/Season 1/[Vcb-Studio] Log Horizon [01][Ma10p 2160P 60Fps][X265 Flac Aac]@Feimao.mkv",
+      "size": 5688330895,
+      "sha1": "C835C10FED3F665F589A6FAB8EA0D98EE0125AA0",
+      "extension": "mkv"
+    }
+  ]
+}
+```
+
+#### Example: `tree` response
+
+```json
+{
+  "original_url": "https://115cdn.com/s/swfsfjg3h7i?password=l3a6",
+  "normalized_url": "https://115cdn.com/s/swfsfjg3h7i?password=l3a6",
+  "provider": "pan115",
+  "list_type": "tree",
+  "share_code": "swfsfjg3h7i",
+  "receive_code": "l3a6",
+  "share_title": "记录的地平线 ログ・ホライズン 4K.60fps(2013)",
+  "share_state": 1,
+  "share_state_label": "normal",
+  "file_count": 62,
+  "result_type": "tree",
+  "tree": {
+    "cid": "3332132736656138606",
+    "name": "记录的地平线 ログ・ホライズン 4K.60fps(2013)",
+    "path": "记录的地平线 ログ・ホライズン 4K.60fps(2013)",
+    "children": [
+      {
+        "node_type": "folder",
+        "cid": "3336420526449419198",
+        "name": "Season 3",
+        "path": "记录的地平线 ログ・ホライズン 4K.60fps(2013)/Season 3",
+        "children": [
+          {
+            "node_type": "file",
+            "fid": "3336500118484870031",
+            "parent_cid": "3336420526449419198",
+            "name": "[Beatrice-Raws] Log Horizon - Entaku Houkai 12 [Ma10p 2160P 60Fps][X265 Flac Aac]@Feimao.mkv",
+            "path": "记录的地平线 ログ・ホライズン 4K.60fps(2013)/Season 3/[Beatrice-Raws] Log Horizon - Entaku Houkai 12 [Ma10p 2160P 60Fps][X265 Flac Aac]@Feimao.mkv",
+            "size": 5643728583,
+            "sha1": "E4CF3837ED7192C8EC787BBC40A43A9665115A27",
+            "extension": "mkv"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### Example: missing receive code
+
+```json
+{
+  "error": {
+    "code": "missing_receive_code",
+    "message": "115 share requires a receive code"
+  }
+}
+```
+
+#### 115 share list error codes
+
+| HTTP Status | Error Code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_url` | Request body URL is invalid |
+| `400` | `unsupported_scheme` | URL scheme is not `http` or `https` |
+| `400` | `invalid_pan115_share_url` | URL is not a 115 share link |
+| `400` | `missing_receive_code` | 115 share requires a receive code |
+| `400` | `invalid_receive_code` | 115 receive code is invalid |
+| `400` | `invalid_share_code` | 115 share code is invalid |
+| `502` | `share_list_request_failed` | 115 upstream request failed |
+| `502` | `share_list_parse_failed` | 115 upstream response could not be parsed |
+| `502` | `share_list_api_error` | 115 upstream API returned an unexpected error |
+
+### `GET /demo`
+
+Returns a built-in HTML page for manually testing the service in a browser.
+
+The page includes:
+
+- A form for `POST /api/check`
+- A form for `POST /api/115/share/list`
+- Project sample 115 links that can be filled into the form with one click
+- `files` and `tree` mode switching
+
+#### Success Response
+
+```text
+HTTP 200 OK
+Content-Type: text/html; charset=utf-8
+```
+
 ### `POST /telegram/webhook`
 
 Receives a Telegram `Update` payload and replies through the configured bot token.

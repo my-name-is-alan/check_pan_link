@@ -25,7 +25,7 @@ impl ProviderChecker for Pan115Checker {
     }
 
     fn matches(&self, url: &Url) -> bool {
-        ["115.com", "115cdn.com"]
+        ["115.com", "115cdn.com", "anxia.com"]
             .iter()
             .any(|domain| host_is_or_subdomain(url, domain))
     }
@@ -362,6 +362,14 @@ mod tests {
     fn extracts_share_code_from_share_path() {
         let url = Url::parse("https://115cdn.com/s/swfsfjg3h7i?password=l3a6").unwrap();
         assert_eq!(extract_share_code(&url).as_deref(), Some("swfsfjg3h7i"));
+    }
+
+    #[test]
+    fn matches_anxia_share_domain() {
+        let checker = Pan115Checker;
+        let url = Url::parse("https://anxia.com/s/swh5dd83nwq?password=6969#").unwrap();
+
+        assert!(checker.matches(&url));
     }
 
     #[test]

@@ -1,4 +1,5 @@
 pub mod api;
+pub mod demo;
 pub mod health;
 pub mod telegram;
 
@@ -16,6 +17,8 @@ use crate::app::AppState;
 
 pub const HEALTH_PATH: &str = "/healthz";
 pub const API_CHECK_PATH: &str = "/api/check";
+pub const API_PAN115_SHARE_LIST_PATH: &str = "/api/115/share/list";
+pub const DEMO_PATH: &str = "/demo";
 pub const TELEGRAM_WEBHOOK_PATH: &str = "/telegram/webhook";
 
 #[cfg(test)]
@@ -27,6 +30,8 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route(HEALTH_PATH, get(health::healthz))
         .route(API_CHECK_PATH, post(api::check))
+        .route(API_PAN115_SHARE_LIST_PATH, post(api::list_pan115_share))
+        .route(DEMO_PATH, get(demo::page))
         .route(TELEGRAM_WEBHOOK_PATH, post(telegram::webhook))
         .with_state(state)
         .layer(cors)
@@ -55,8 +60,11 @@ mod tests {
     #[test]
     fn route_namespaces_preserve_future_ui_space() {
         assert!(API_CHECK_PATH.starts_with("/api/"));
+        assert!(API_PAN115_SHARE_LIST_PATH.starts_with("/api/"));
         assert!(TELEGRAM_WEBHOOK_PATH.starts_with("/telegram/"));
         assert!(!HEALTH_PATH.starts_with("/api/"));
         assert!(!HEALTH_PATH.starts_with("/telegram/"));
+        assert!(!DEMO_PATH.starts_with("/api/"));
+        assert!(!DEMO_PATH.starts_with("/telegram/"));
     }
 }
