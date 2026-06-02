@@ -235,6 +235,7 @@ Checks a cloud-drive share link and returns normalized status information.
 | --- | --- |
 | `valid` | Link is confirmed usable |
 | `invalid` | Link is confirmed unavailable or rejected |
+| `processing` | Link is still being processed or reviewed upstream |
 | `unknown` | Service could not reach a stable conclusion |
 
 #### Provider Values
@@ -368,7 +369,7 @@ Supported 115 share domains currently include `115.com`, `115cdn.com`, and `anxi
 {
   "error": {
     "code": "missing_receive_code",
-    "message": "115 share requires a receive code"
+    "message": "share requires a receive code"
   }
 }
 ```
@@ -380,12 +381,117 @@ Supported 115 share domains currently include `115.com`, `115cdn.com`, and `anxi
 | `400` | `invalid_url` | Request body URL is invalid |
 | `400` | `unsupported_scheme` | URL scheme is not `http` or `https` |
 | `400` | `invalid_pan115_share_url` | URL is not a 115 share link |
-| `400` | `missing_receive_code` | 115 share requires a receive code |
-| `400` | `invalid_receive_code` | 115 receive code is invalid |
-| `400` | `invalid_share_code` | 115 share code is invalid |
+| `400` | `missing_receive_code` | Share requires a receive code |
+| `400` | `invalid_receive_code` | Share receive code is invalid |
+| `400` | `invalid_share_code` | Share code is invalid or inactive |
 | `502` | `share_list_request_failed` | 115 upstream request failed |
 | `502` | `share_list_parse_failed` | 115 upstream response could not be parsed |
 | `502` | `share_list_api_error` | 115 upstream API returned an unexpected error |
+
+### `POST /api/123/share/list`
+
+Fetches a 123 Pan share's file listing.
+
+Supported 123 share domains currently include `123pan.com`, `123pan.cn`, `123865.com`, `123912.com`, `123684.com`, and `123635.com`.
+
+The service accepts legacy share URLs, but it queries 123's canonical upstream API host internally:
+
+- Share info: `https://www.123pan.com/gsb/s/<share_key>`
+- File listing: `https://www.123pan.com/b/api/share/get`
+
+#### Request Body
+
+```json
+{
+  "url": "https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat",
+  "list_type": "files"
+}
+```
+
+#### `list_type` values
+
+| Value | Meaning |
+| --- | --- |
+| `files` | Return only files with full paths |
+| `tree` | Preserve folder structure and return a tree |
+
+#### Example: `files` response
+
+```json
+{
+  "original_url": "https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat",
+  "normalized_url": "https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat",
+  "provider": "pan123",
+  "list_type": "files",
+  "share_key": "IpPUVv-gGKj",
+  "receive_code": "Ocat",
+  "share_name": "鲭鱼罐头，飞向宇宙 (2026) {tmdbid-315209}",
+  "share_user_id": 1813308069,
+  "expired": false,
+  "file_count": 8,
+  "result_type": "files",
+  "files": [
+    {
+      "file_id": "49206767",
+      "parent_file_id": "49206769",
+      "name": "Episode 01.mkv",
+      "path": "鲭鱼罐头，飞向宇宙 (2026) {tmdbid-315209}/Season 1/Episode 01.mkv",
+      "size": 3397097980,
+      "etag": "ec0e72fb6739ef984107d2b0c30d7861",
+      "category": 2,
+      "status": 2
+    }
+  ]
+}
+```
+
+#### Example: `tree` response
+
+```json
+{
+  "original_url": "https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat",
+  "normalized_url": "https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat",
+  "provider": "pan123",
+  "list_type": "tree",
+  "share_key": "IpPUVv-gGKj",
+  "receive_code": "Ocat",
+  "share_name": "鲭鱼罐头，飞向宇宙 (2026) {tmdbid-315209}",
+  "share_user_id": 1813308069,
+  "expired": false,
+  "file_count": 8,
+  "result_type": "tree",
+  "tree": {
+    "file_id": "49206768",
+    "parent_file_id": "32091973",
+    "name": "鲭鱼罐头，飞向宇宙 (2026) {tmdbid-315209}",
+    "path": "鲭鱼罐头，飞向宇宙 (2026) {tmdbid-315209}",
+    "children": [
+      {
+        "node_type": "folder",
+        "file_id": "49206769",
+        "parent_file_id": "49206768",
+        "name": "Season 1",
+        "path": "鲭鱼罐头，飞向宇宙 (2026) {tmdbid-315209}/Season 1",
+        "children": []
+      }
+    ]
+  }
+}
+```
+
+#### 123 share list error codes
+
+| HTTP Status | Error Code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_url` | Request body URL is invalid |
+| `400` | `unsupported_scheme` | URL scheme is not `http` or `https` |
+| `400` | `invalid_pan123_share_url` | URL is not a 123 share link |
+| `400` | `missing_receive_code` | Share requires a receive code |
+| `400` | `invalid_receive_code` | Share receive code is invalid |
+| `400` | `invalid_share_code` | Share code is invalid or inactive |
+| `502` | `share_list_request_failed` | 123 upstream request failed |
+| `502` | `share_list_parse_failed` | 123 upstream response could not be parsed |
+| `502` | `share_list_api_error` | 123 upstream API returned an unexpected error |
 
 ### `GET /demo`
 
@@ -395,7 +501,9 @@ The page includes:
 
 - A form for `POST /api/check`
 - A form for `POST /api/115/share/list`
-- Project sample 115 links that can be filled into the form with one click
+- A form for `POST /api/123/share/list`
+- Project sample 115 / 123 links that can be filled into the form with one click
+- Provider switching between 115 and 123 list APIs
 - `files` and `tree` mode switching
 
 #### Success Response

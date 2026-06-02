@@ -86,6 +86,7 @@ fn status_text(status: &CheckStatus) -> &'static str {
     match status {
         CheckStatus::Valid => "valid",
         CheckStatus::Invalid => "invalid",
+        CheckStatus::Processing => "processing",
         CheckStatus::Unknown => "unknown",
     }
 }

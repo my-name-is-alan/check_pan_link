@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>115 Share Demo</title>
+  <title>115 / 123 Share Demo</title>
   <style>
     :root {
       --bg: #f2efe7;
@@ -221,11 +221,12 @@
   <main>
     <section class="hero">
       <span class="eyebrow">Built-in demo</span>
-      <h1>115 Share Demo</h1>
-      <p>这个页面直接调用当前服务里的两个接口：<code>/api/check</code> 和 <code>/api/115/share/list</code>。可以顺手测 115 分享链接状态，也可以切换 <code>files</code> / <code>tree</code> 看目录返回。</p>
+      <h1>115 / 123 Share Demo</h1>
+      <p>这个页面直接调用当前服务里的检查和文件列表接口：<code>/api/check</code>、<code>/api/115/share/list</code>、<code>/api/123/share/list</code>。可以顺手测分享链接状态，也可以切换 provider 和 <code>files</code> / <code>tree</code> 看目录返回。</p>
       <div class="meta">
         <span>Check API: <code>POST /api/check</code></span>
         <span>List API: <code>POST /api/115/share/list</code></span>
+        <span>List API: <code>POST /api/123/share/list</code></span>
       </div>
     </section>
 
@@ -235,27 +236,35 @@
         <p>下面这些链接都来自项目文档，方便你直接点一下塞到表单里。</p>
         <div class="examples">
           <article class="example">
-            <strong>有效目录链接</strong>
+            <strong>115 有效目录链接</strong>
             <code>https://115cdn.com/s/swfsfjg3h7i?password=l3a6</code>
             <div class="button-row" style="margin-top: 12px;">
-              <button type="button" onclick="useExample('https://115cdn.com/s/swfsfjg3h7i?password=l3a6', 'files')">填充 files</button>
-              <button type="button" class="secondary" onclick="useExample('https://115cdn.com/s/swfsfjg3h7i?password=l3a6', 'tree')">填充 tree</button>
+              <button type="button" onclick="useExample('https://115cdn.com/s/swfsfjg3h7i?password=l3a6', 'files', 'pan115')">填充 files</button>
+              <button type="button" class="secondary" onclick="useExample('https://115cdn.com/s/swfsfjg3h7i?password=l3a6', 'tree', 'pan115')">填充 tree</button>
             </div>
           </article>
           <article class="example">
-            <strong>过期链接</strong>
+            <strong>123 有效目录链接</strong>
+            <code>https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat</code>
+            <div class="button-row" style="margin-top: 12px;">
+              <button type="button" onclick="useExample('https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat', 'files', 'pan123')">填充 files</button>
+              <button type="button" class="secondary" onclick="useExample('https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat', 'tree', 'pan123')">填充 tree</button>
+            </div>
+          </article>
+          <article class="example">
+            <strong>115 过期链接</strong>
             <code>https://115cdn.com/s/swhc5pf3fw0?password=rf10</code>
             <div class="button-row" style="margin-top: 12px;">
-              <button type="button" onclick="fillCheckOnly('https://115cdn.com/s/swhc5pf3fw0?password=rf10')">只测 check</button>
-              <button type="button" class="secondary" onclick="useExample('https://115cdn.com/s/swhc5pf3fw0?password=rf10', 'files')">也试试 list</button>
+              <button type="button" onclick="fillCheckOnly('https://115cdn.com/s/swhc5pf3fw0?password=rf10', 'pan115')">只测 check</button>
+              <button type="button" class="secondary" onclick="useExample('https://115cdn.com/s/swhc5pf3fw0?password=rf10', 'files', 'pan115')">也试试 list</button>
             </div>
           </article>
           <article class="example">
-            <strong>缺少提取码</strong>
+            <strong>115 缺少提取码</strong>
             <code>https://115cdn.com/s/swfsfjg3h7i</code>
             <div class="button-row" style="margin-top: 12px;">
-              <button type="button" onclick="fillCheckOnly('https://115cdn.com/s/swfsfjg3h7i')">只测 check</button>
-              <button type="button" class="secondary" onclick="useExample('https://115cdn.com/s/swfsfjg3h7i', 'files')">也试试 list</button>
+              <button type="button" onclick="fillCheckOnly('https://115cdn.com/s/swfsfjg3h7i', 'pan115')">只测 check</button>
+              <button type="button" class="secondary" onclick="useExample('https://115cdn.com/s/swfsfjg3h7i', 'files', 'pan115')">也试试 list</button>
             </div>
           </article>
         </div>
@@ -265,8 +274,15 @@
         <h2>Playground</h2>
         <div class="stack">
           <div>
-            <label for="share-url">115 分享链接</label>
-            <input id="share-url" name="share-url" value="https://115cdn.com/s/swfsfjg3h7i?password=l3a6" />
+            <label for="share-url">分享链接</label>
+            <input id="share-url" name="share-url" value="https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat" />
+          </div>
+          <div>
+            <label for="share-provider">provider</label>
+            <select id="share-provider" name="share-provider">
+              <option value="pan123">123 云盘</option>
+              <option value="pan115">115 网盘</option>
+            </select>
           </div>
           <div>
             <label for="list-type">list_type</label>
@@ -294,7 +310,7 @@
         <ul class="tips">
           <li><code>files</code> 模式会只返回文件，并把完整路径塞进 <code>path</code>。</li>
           <li><code>tree</code> 模式会返回一个根节点，下面保留目录层级。</li>
-          <li>如果链接缺少提取码或提取码错误，<code>/api/115/share/list</code> 会直接返回结构化错误。</li>
+          <li>如果链接缺少提取码或提取码错误，<code>/api/115/share/list</code> 和 <code>/api/123/share/list</code> 都会直接返回结构化错误。</li>
         </ul>
       </section>
       <section class="panel">
@@ -306,6 +322,7 @@
 
   <script>
     const urlInput = document.getElementById("share-url");
+    const providerInput = document.getElementById("share-provider");
     const listTypeInput = document.getElementById("list-type");
     const resultOutput = document.getElementById("result-json");
     const statusOutput = document.getElementById("status");
@@ -320,14 +337,32 @@
       resultOutput.value = JSON.stringify(payload, null, 2);
     }
 
-    function useExample(url, listType) {
+    function detectProvider(url) {
+      try {
+        const hostname = new URL(url).hostname.toLowerCase();
+        if (hostname.includes("123")) {
+          return "pan123";
+        }
+        return "pan115";
+      } catch {
+        return providerInput.value;
+      }
+    }
+
+    function listEndpoint(provider) {
+      return provider === "pan123" ? "/api/123/share/list" : "/api/115/share/list";
+    }
+
+    function useExample(url, listType, provider) {
       urlInput.value = url;
+      providerInput.value = provider || detectProvider(url);
       listTypeInput.value = listType;
       setStatus("示例已填充");
     }
 
-    function fillCheckOnly(url) {
+    function fillCheckOnly(url, provider) {
       urlInput.value = url;
+      providerInput.value = provider || detectProvider(url);
       setStatus("链接已填充，可以先测 check");
     }
 
@@ -361,9 +396,10 @@
     }
 
     async function runList() {
-      setStatus("正在调用 /api/115/share/list ...");
+      const endpoint = listEndpoint(providerInput.value);
+      setStatus(`正在调用 ${endpoint} ...`);
       try {
-        const payload = await postJson("/api/115/share/list", {
+        const payload = await postJson(endpoint, {
           url: urlInput.value,
           list_type: listTypeInput.value
         });
@@ -376,8 +412,9 @@
     }
 
     writeJson({
-      hint: "选择示例或者直接输入 115 链接，然后点击上面的按钮。",
-      list_api: "/api/115/share/list",
+      hint: "选择示例或者直接输入 115 / 123 链接，然后选择 provider 和 list_type。",
+      list_api_115: "/api/115/share/list",
+      list_api_123: "/api/123/share/list",
       check_api: "/api/check"
     });
   </script>

@@ -3,6 +3,7 @@ pub mod generic;
 pub mod pan115;
 pub mod pan115_share;
 pub mod pan123;
+pub mod pan123_share;
 pub mod pan189;
 
 use std::sync::Arc;

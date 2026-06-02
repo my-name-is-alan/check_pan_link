@@ -209,14 +209,14 @@ fn classify_share_snap(body: &ShareSnapResponse) -> (CheckStatus, &'static str) 
 
     match body.data.as_ref().and_then(ShareSnapData::share_state) {
         Some(1) => (CheckStatus::Valid, "share_available"),
-        Some(0) => (CheckStatus::Unknown, "share_processing"),
+        Some(0) => (CheckStatus::Processing, "share_processing"),
         Some(2) => (CheckStatus::Invalid, "share_copyright_blocked"),
         Some(3) => (CheckStatus::Invalid, "share_pornography_blocked"),
         Some(4) => (CheckStatus::Invalid, "share_cancelled"),
         Some(5) => (CheckStatus::Invalid, "share_deleted"),
         Some(6) => (CheckStatus::Invalid, "share_violence_blocked"),
         Some(7) => (CheckStatus::Invalid, "share_expired"),
-        Some(8) => (CheckStatus::Unknown, "share_reviewing"),
+        Some(8) => (CheckStatus::Processing, "share_reviewing"),
         Some(_) => (CheckStatus::Unknown, "share_state_unknown"),
         None => (CheckStatus::Unknown, "share_state_missing"),
     }
@@ -431,6 +431,64 @@ mod tests {
         assert_eq!(result.reason, "share_expired");
         assert_eq!(result.metadata["share_state_label"], json!("expired"));
         assert_eq!(result.metadata["forbid_reason"], json!("链接已过期"));
+    }
+
+    #[test]
+    fn serializes_reviewing_share_status_as_processing() {
+        let result = build_result(
+            r#"{
+                "state": true,
+                "error": "",
+                "errno": 0,
+                "data": {
+                    "shareinfo": {
+                        "share_state": 8,
+                        "share_title": "审核中的分享",
+                        "forbid_reason": "",
+                        "file_size": 1,
+                        "has_receive_code": 1,
+                        "have_vio_file": 0,
+                        "share_duration": -1,
+                        "expire_time": -1
+                    }
+                }
+            }"#,
+        );
+
+        let json = serde_json::to_value(&result).unwrap();
+
+        assert_eq!(result.reason, "share_reviewing");
+        assert_eq!(result.metadata["share_state_label"], json!("reviewing"));
+        assert_eq!(json["status"], "processing");
+    }
+
+    #[test]
+    fn serializes_processing_share_status_as_processing() {
+        let result = build_result(
+            r#"{
+                "state": true,
+                "error": "",
+                "errno": 0,
+                "data": {
+                    "shareinfo": {
+                        "share_state": 0,
+                        "share_title": "处理中分享",
+                        "forbid_reason": "",
+                        "file_size": 1,
+                        "has_receive_code": 1,
+                        "have_vio_file": 0,
+                        "share_duration": -1,
+                        "expire_time": -1
+                    }
+                }
+            }"#,
+        );
+
+        let json = serde_json::to_value(&result).unwrap();
+
+        assert_eq!(result.reason, "share_processing");
+        assert_eq!(result.metadata["share_state_label"], json!("processing"));
+        assert_eq!(json["status"], "processing");
     }
 
     #[test]

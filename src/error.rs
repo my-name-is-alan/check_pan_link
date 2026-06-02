@@ -20,17 +20,19 @@ pub enum CheckError {
 pub enum ShareListError {
     #[error("invalid 115 share URL")]
     InvalidPan115ShareUrl,
+    #[error("invalid 123 share URL")]
+    InvalidPan123ShareUrl,
     #[error("share requires receive code")]
     MissingReceiveCode,
     #[error("share receive code is invalid")]
     InvalidReceiveCode,
     #[error("share code is invalid")]
     InvalidShareCode,
-    #[error("failed to request 115 share list: {0}")]
+    #[error("failed to request share list: {0}")]
     RequestFailed(String),
-    #[error("failed to parse 115 share list response: {0}")]
+    #[error("failed to parse share list response: {0}")]
     ParseFailed(String),
-    #[error("115 share list API returned an error: {0}")]
+    #[error("share list API returned an error: {0}")]
     Api(String),
 }
 
@@ -104,14 +106,18 @@ impl From<ShareListError> for ApiError {
                 "invalid_pan115_share_url",
                 "expected a 115 share URL like https://115cdn.com/s/<share_code>?password=<code> or https://anxia.com/s/<share_code>?password=<code>",
             ),
+            ShareListError::InvalidPan123ShareUrl => Self::bad_request(
+                "invalid_pan123_share_url",
+                "expected a 123 share URL like https://www.123865.com/s/<share_key>?pwd=<code> or https://www.123pan.com/s/<share_key>?pwd=<code>",
+            ),
             ShareListError::MissingReceiveCode => {
-                Self::bad_request("missing_receive_code", "115 share requires a receive code")
+                Self::bad_request("missing_receive_code", "share requires a receive code")
             }
             ShareListError::InvalidReceiveCode => {
-                Self::bad_request("invalid_receive_code", "115 receive code is invalid")
+                Self::bad_request("invalid_receive_code", "share receive code is invalid")
             }
             ShareListError::InvalidShareCode => {
-                Self::bad_request("invalid_share_code", "115 share code is invalid")
+                Self::bad_request("invalid_share_code", "share code is invalid or inactive")
             }
             ShareListError::RequestFailed(message) => {
                 Self::bad_gateway("share_list_request_failed", message)

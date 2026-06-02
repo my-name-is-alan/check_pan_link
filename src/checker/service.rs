@@ -5,10 +5,13 @@ use url::Url;
 
 use crate::{
     checker::model::{
-        CheckRequest, CheckResult, Pan115ShareListRequest, Pan115ShareListResponse, Provider,
+        CheckRequest, CheckResult, Pan115ShareListRequest, Pan115ShareListResponse,
+        Pan123ShareListRequest, Pan123ShareListResponse, Provider,
     },
     error::{ApiError, CheckError},
-    providers::{CheckContext, ProviderRegistry, common::host_is_or_subdomain, pan115_share},
+    providers::{
+        CheckContext, ProviderRegistry, common::host_is_or_subdomain, pan115_share, pan123_share,
+    },
 };
 
 #[cfg(test)]
@@ -56,6 +59,17 @@ impl LinkCheckerService {
             .map_err(Into::into)
     }
 
+    pub async fn list_pan123_share(
+        &self,
+        request: Pan123ShareListRequest,
+    ) -> Result<Pan123ShareListResponse, ApiError> {
+        let context = self.build_pan123_context(request.url)?;
+
+        pan123_share::list_share(context, request.list_type)
+            .await
+            .map_err(Into::into)
+    }
+
     pub fn detect_provider(&self, url: &Url) -> Provider {
         let normalized = normalize_pan115_share_url(url);
         self.providers.detect(&normalized)
@@ -68,6 +82,23 @@ impl LinkCheckerService {
             return Err(ApiError::bad_request(
                 "invalid_pan115_share_url",
                 "expected a 115 share URL like https://115cdn.com/s/<share_code>?password=<code> or https://anxia.com/s/<share_code>?password=<code>",
+            ));
+        }
+
+        Ok(CheckContext {
+            original_url,
+            url,
+            client: self.client.clone(),
+        })
+    }
+
+    fn build_pan123_context(&self, original_url: String) -> Result<CheckContext, ApiError> {
+        let url = parse_http_url(&original_url).map_err(ApiError::from)?;
+
+        if self.detect_provider(&url) != Provider::Pan123 {
+            return Err(ApiError::bad_request(
+                "invalid_pan123_share_url",
+                "expected a 123 share URL like https://www.123865.com/s/<share_key>?pwd=<code> or https://www.123pan.com/s/<share_key>?pwd=<code>",
             ));
         }
 
@@ -98,6 +129,35 @@ impl LinkCheckerService {
         };
 
         pan115_share::list_share_with_endpoint(context, request.list_type, endpoint).await
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn list_pan123_share_with_endpoints(
+        &self,
+        request: Pan123ShareListRequest,
+        share_info_endpoint: &str,
+        share_get_endpoint: &str,
+    ) -> Result<Pan123ShareListResponse, ShareListError> {
+        let url =
+            parse_http_url(&request.url).map_err(|_| ShareListError::InvalidPan123ShareUrl)?;
+
+        if self.detect_provider(&url) != Provider::Pan123 {
+            return Err(ShareListError::InvalidPan123ShareUrl);
+        }
+
+        let context = CheckContext {
+            original_url: request.url,
+            url,
+            client: self.client.clone(),
+        };
+
+        pan123_share::list_share_with_endpoints(
+            context,
+            request.list_type,
+            share_info_endpoint,
+            share_get_endpoint,
+        )
+        .await
     }
 }
 
@@ -202,6 +262,12 @@ mod tests {
         );
         assert_eq!(
             checker.detect_provider(&Url::parse("https://www.123pan.com/s/example").unwrap()),
+            Provider::Pan123
+        );
+        assert_eq!(
+            checker.detect_provider(
+                &Url::parse("https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat").unwrap()
+            ),
             Provider::Pan123
         );
         assert_eq!(

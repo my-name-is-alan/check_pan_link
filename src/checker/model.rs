@@ -23,11 +23,27 @@ pub struct Pan115ShareListRequest {
     pub list_type: Pan115ListType,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Pan123ListType {
+    #[default]
+    Files,
+    Tree,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct Pan123ShareListRequest {
+    pub url: String,
+    #[serde(default)]
+    pub list_type: Pan123ListType,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
     Valid,
     Invalid,
+    Processing,
     Unknown,
 }
 
@@ -125,6 +141,81 @@ pub struct Pan115ShareListResponse {
     pub file_count: usize,
     #[serde(flatten)]
     pub payload: Pan115ShareListPayload,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct Pan123ShareFile {
+    pub file_id: String,
+    pub parent_file_id: String,
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct Pan123ShareFolderNode {
+    pub file_id: String,
+    pub parent_file_id: String,
+    pub name: String,
+    pub path: String,
+    pub children: Vec<Pan123ShareNode>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "node_type", rename_all = "snake_case")]
+pub enum Pan123ShareNode {
+    Folder {
+        file_id: String,
+        parent_file_id: String,
+        name: String,
+        path: String,
+        children: Vec<Pan123ShareNode>,
+    },
+    File {
+        file_id: String,
+        parent_file_id: String,
+        name: String,
+        path: String,
+        size: u64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        etag: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        category: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<i64>,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "result_type", rename_all = "snake_case")]
+pub enum Pan123ShareListPayload {
+    Files { files: Vec<Pan123ShareFile> },
+    Tree { tree: Pan123ShareFolderNode },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct Pan123ShareListResponse {
+    pub original_url: String,
+    pub normalized_url: String,
+    pub provider: Provider,
+    pub list_type: Pan123ListType,
+    pub share_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receive_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub share_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub share_user_id: Option<u64>,
+    pub expired: bool,
+    pub file_count: usize,
+    #[serde(flatten)]
+    pub payload: Pan123ShareListPayload,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
