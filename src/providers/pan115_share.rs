@@ -9,7 +9,7 @@ use crate::{
         Pan115ShareListResponse, Pan115ShareNode, Provider,
     },
     error::ShareListError,
-    providers::common::CheckContext,
+    providers::{common::CheckContext, pan115_headers::with_share_snap_headers},
 };
 
 const SHARE_SNAP_ENDPOINT: &str = "https://webapi.115.com/share/snap";
@@ -326,8 +326,7 @@ async fn fetch_share_snap_page(
     let request_url = Url::parse_with_params(endpoint, &query_params)
         .map_err(|_| ShareListError::RequestFailed("invalid share list endpoint".to_string()))?;
 
-    let response = client
-        .get(request_url)
+    let response = with_share_snap_headers(client.get(request_url))
         .send()
         .await
         .map_err(map_request_error)?;
@@ -533,10 +532,15 @@ mod tests {
     use axum::{
         Json, Router,
         extract::{Query, State},
+        http::HeaderMap,
         routing::get,
     };
     use serde_json::{Value, json};
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::{
+        collections::BTreeMap,
+        net::Ipv4Addr,
+        sync::{Arc, Mutex},
+    };
     use tokio::net::TcpListener;
 
     use crate::{
@@ -654,6 +658,63 @@ mod tests {
         assert_eq!(
             response.normalized_url,
             "https://115cdn.com/s/swfsfjg3h7i?password=l3a6"
+        );
+    }
+
+    #[tokio::test]
+    async fn sends_115_origin_headers_with_random_forwarded_ip() {
+        let captured_headers = Arc::new(Mutex::new(Vec::new()));
+        let endpoint = spawn_share_api_with_header_capture(
+            BTreeMap::from([(
+                key("0", 0),
+                json!({
+                    "state": true,
+                    "error": "",
+                    "errno": 0,
+                    "data": {
+                        "shareinfo": {
+                            "share_state": 1,
+                            "share_title": "空分享",
+                            "forbid_reason": "",
+                            "file_size": 0,
+                            "has_receive_code": 1,
+                            "have_vio_file": 0,
+                            "share_duration": -1,
+                            "expire_time": -1
+                        },
+                        "count": 0,
+                        "list": []
+                    }
+                }),
+            )]),
+            captured_headers.clone(),
+        )
+        .await;
+        let service = build_service();
+
+        service
+            .list_pan115_share_with_endpoint(
+                Pan115ShareListRequest {
+                    url: "https://115cdn.com/s/swfsfjg3h7i?password=l3a6".to_string(),
+                    list_type: Pan115ListType::Files,
+                },
+                &endpoint,
+            )
+            .await
+            .unwrap();
+
+        let headers = captured_headers.lock().unwrap();
+        let first_request = headers.first().expect("expected one upstream request");
+
+        assert_eq!(first_request.referer.as_deref(), Some("https://115.com/"));
+        assert_eq!(first_request.origin.as_deref(), Some("https://115.com"));
+        assert!(
+            first_request
+                .x_forwarded_for
+                .as_deref()
+                .is_some_and(is_public_forwarded_ipv4),
+            "expected a public IPv4 X-Forwarded-For header, got {:?}",
+            first_request.x_forwarded_for
         );
     }
 
@@ -936,16 +997,71 @@ mod tests {
         format!("{cid}:{offset}")
     }
 
+    #[derive(Debug)]
+    struct CapturedHeaders {
+        referer: Option<String>,
+        origin: Option<String>,
+        x_forwarded_for: Option<String>,
+    }
+
+    impl CapturedHeaders {
+        fn from_headers(headers: &HeaderMap) -> Self {
+            Self {
+                referer: header_value(headers, "referer"),
+                origin: header_value(headers, "origin"),
+                x_forwarded_for: header_value(headers, "x-forwarded-for"),
+            }
+        }
+    }
+
+    fn header_value(headers: &HeaderMap, name: &str) -> Option<String> {
+        headers
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .map(ToString::to_string)
+    }
+
+    fn is_public_forwarded_ipv4(value: &str) -> bool {
+        let Ok(address) = value.parse::<Ipv4Addr>() else {
+            return false;
+        };
+        let [first, second, ..] = address.octets();
+
+        if !(1..=223).contains(&first) {
+            return false;
+        }
+
+        !matches!(
+            (first, second),
+            (10, _) | (127, _) | (172, 16..=31) | (192, 168) | (169, 254)
+        )
+    }
+
     async fn spawn_share_api(responses: BTreeMap<String, Value>) -> String {
+        spawn_share_api_with_header_capture(responses, Arc::new(Mutex::new(Vec::new()))).await
+    }
+
+    async fn spawn_share_api_with_header_capture(
+        responses: BTreeMap<String, Value>,
+        captured_headers: Arc<Mutex<Vec<CapturedHeaders>>>,
+    ) -> String {
         #[derive(Clone)]
         struct MockState {
             responses: Arc<BTreeMap<String, Value>>,
+            captured_headers: Arc<Mutex<Vec<CapturedHeaders>>>,
         }
 
         async fn share_snap(
             State(state): State<MockState>,
+            headers: HeaderMap,
             Query(query): Query<BTreeMap<String, String>>,
         ) -> Json<Value> {
+            state
+                .captured_headers
+                .lock()
+                .unwrap()
+                .push(CapturedHeaders::from_headers(&headers));
+
             let cid = query.get("cid").cloned().unwrap_or_else(|| "0".to_string());
             let offset = query
                 .get("offset")
@@ -962,6 +1078,7 @@ mod tests {
             .route("/share/snap", get(share_snap))
             .with_state(MockState {
                 responses: Arc::new(responses),
+                captured_headers,
             });
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

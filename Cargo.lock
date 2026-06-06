@@ -224,6 +224,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "rand",
  "reqwest 0.13.3",
  "serde",
  "serde_json",

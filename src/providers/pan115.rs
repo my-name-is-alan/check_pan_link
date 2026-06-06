@@ -8,7 +8,10 @@ use url::Url;
 use crate::{
     checker::{CheckResult, CheckStatus, Provider},
     error::CheckError,
-    providers::common::{CheckContext, ProviderChecker, basic_http_check, host_is_or_subdomain},
+    providers::{
+        common::{CheckContext, ProviderChecker, basic_http_check, host_is_or_subdomain},
+        pan115_headers::with_share_snap_headers,
+    },
 };
 
 const SHARE_SNAP_ENDPOINT: &str = "https://webapi.115.com/share/snap";
@@ -64,7 +67,7 @@ async fn check_share_snap(
 
     let request_url = Url::parse_with_params(SHARE_SNAP_ENDPOINT, &query_params)
         .expect("share snap endpoint should always produce a valid URL");
-    let request = context.client.get(request_url);
+    let request = with_share_snap_headers(context.client.get(request_url));
 
     match request.send().await {
         Ok(response) => {
