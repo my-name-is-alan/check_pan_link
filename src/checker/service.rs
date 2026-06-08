@@ -6,11 +6,13 @@ use url::Url;
 use crate::{
     checker::model::{
         CheckRequest, CheckResult, Pan115ShareListRequest, Pan115ShareListResponse,
-        Pan123ShareListRequest, Pan123ShareListResponse, Provider,
+        Pan123ShareListRequest, Pan123ShareListResponse, Pan189ShareListRequest,
+        Pan189ShareListResponse, Provider,
     },
     error::{ApiError, CheckError},
     providers::{
         CheckContext, ProviderRegistry, common::host_is_or_subdomain, pan115_share, pan123_share,
+        pan189_share,
     },
 };
 
@@ -70,6 +72,17 @@ impl LinkCheckerService {
             .map_err(Into::into)
     }
 
+    pub async fn list_pan189_share(
+        &self,
+        request: Pan189ShareListRequest,
+    ) -> Result<Pan189ShareListResponse, ApiError> {
+        let context = self.build_pan189_context(request.url)?;
+
+        pan189_share::list_share(context, request.list_type)
+            .await
+            .map_err(Into::into)
+    }
+
     pub fn detect_provider(&self, url: &Url) -> Provider {
         let normalized = normalize_pan115_share_url(url);
         self.providers.detect(&normalized)
@@ -99,6 +112,23 @@ impl LinkCheckerService {
             return Err(ApiError::bad_request(
                 "invalid_pan123_share_url",
                 "expected a 123 share URL like https://www.123865.com/s/<share_key>?pwd=<code> or https://www.123pan.com/s/<share_key>?pwd=<code>",
+            ));
+        }
+
+        Ok(CheckContext {
+            original_url,
+            url,
+            client: self.client.clone(),
+        })
+    }
+
+    fn build_pan189_context(&self, original_url: String) -> Result<CheckContext, ApiError> {
+        let url = parse_http_url(&original_url).map_err(ApiError::from)?;
+
+        if self.detect_provider(&url) != Provider::Pan189 {
+            return Err(ApiError::bad_request(
+                "invalid_pan189_share_url",
+                "expected an 189 share URL like https://cloud.189.cn/t/<share_code>?accessCode=<code> or https://cloud.189.cn/web/share?code=<share_code>",
             ));
         }
 
@@ -158,6 +188,29 @@ impl LinkCheckerService {
             share_get_endpoint,
         )
         .await
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn list_pan189_share_with_endpoint(
+        &self,
+        request: Pan189ShareListRequest,
+        list_endpoint: &str,
+    ) -> Result<Pan189ShareListResponse, ShareListError> {
+        let url =
+            parse_http_url(&request.url).map_err(|_| ShareListError::InvalidPan189ShareUrl)?;
+
+        if self.detect_provider(&url) != Provider::Pan189 {
+            return Err(ShareListError::InvalidPan189ShareUrl);
+        }
+
+        let context = CheckContext {
+            original_url: request.url,
+            url,
+            client: self.client.clone(),
+        };
+
+        pan189_share::list_share_with_endpoints(context, request.list_type, Some(list_endpoint))
+            .await
     }
 }
 

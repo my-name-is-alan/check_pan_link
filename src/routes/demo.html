@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>115 / 123 Share Demo</title>
+  <title>115 / 123 / 189 Share Demo</title>
   <style>
     :root {
       --bg: #f2efe7;
@@ -221,12 +221,13 @@
   <main>
     <section class="hero">
       <span class="eyebrow">Built-in demo</span>
-      <h1>115 / 123 Share Demo</h1>
-      <p>这个页面直接调用当前服务里的检查和文件列表接口：<code>/api/check</code>、<code>/api/115/share/list</code>、<code>/api/123/share/list</code>。可以顺手测分享链接状态，也可以切换 provider 和 <code>files</code> / <code>tree</code> 看目录返回。</p>
+      <h1>115 / 123 / 189 Share Demo</h1>
+      <p>这个页面直接调用当前服务里的检查和文件列表接口：<code>/api/check</code>、<code>/api/115/share/list</code>、<code>/api/123/share/list</code>、<code>/api/189/share/list</code>。可以测分享状态，也可以切换 provider 和 <code>files</code> / <code>tree</code> 看目录返回。</p>
       <div class="meta">
         <span>Check API: <code>POST /api/check</code></span>
         <span>List API: <code>POST /api/115/share/list</code></span>
         <span>List API: <code>POST /api/123/share/list</code></span>
+        <span>List API: <code>POST /api/189/share/list</code></span>
       </div>
     </section>
 
@@ -267,6 +268,43 @@
               <button type="button" class="secondary" onclick="useExample('https://115cdn.com/s/swfsfjg3h7i', 'files', 'pan115')">也试试 list</button>
             </div>
           </article>
+          <article class="example">
+            <strong>189 正常链接（短链 + 访问码）</strong>
+            <code>https://cloud.189.cn/t/yYvIvyVfY7rm?accessCode=1hit</code>
+            <div class="button-row" style="margin-top: 12px;">
+              <button type="button" onclick="useExample('https://cloud.189.cn/t/yYvIvyVfY7rm?accessCode=1hit', 'files', 'pan189')">填充 files</button>
+              <button type="button" class="secondary" onclick="useExample('https://cloud.189.cn/t/yYvIvyVfY7rm?accessCode=1hit', 'tree', 'pan189')">填充 tree</button>
+            </div>
+          </article>
+          <article class="example">
+            <strong>189 正常链接（访问码写在 code 里）</strong>
+            <code>https://cloud.189.cn/web/share?code=UreieiIZJbU3（访问码：xw6v）</code>
+            <div class="button-row" style="margin-top: 12px;">
+              <button type="button" onclick="useExample('https://cloud.189.cn/web/share?code=UreieiIZJbU3%EF%BC%88%E8%AE%BF%E9%97%AE%E7%A0%81%EF%BC%9Axw6v%EF%BC%89', 'files', 'pan189')">填充 files</button>
+              <button type="button" class="secondary" onclick="useExample('https://cloud.189.cn/web/share?code=UreieiIZJbU3%EF%BC%88%E8%AE%BF%E9%97%AE%E7%A0%81%EF%BC%9Axw6v%EF%BC%89', 'tree', 'pan189')">填充 tree</button>
+            </div>
+          </article>
+          <article class="example">
+            <strong>189 已取消分享</strong>
+            <code>https://cloud.189.cn/web/share?code=nIB7Fr6Nn2ua（访问码：sbl6）</code>
+            <div class="button-row" style="margin-top: 12px;">
+              <button type="button" onclick="fillCheckOnly('https://cloud.189.cn/web/share?code=nIB7Fr6Nn2ua&accessCode=sbl6', 'pan189')">只测 check</button>
+            </div>
+          </article>
+          <article class="example">
+            <strong>189 文件被和谐</strong>
+            <code>https://cloud.189.cn/t/uQ7vMzbMZvQn</code>
+            <div class="button-row" style="margin-top: 12px;">
+              <button type="button" onclick="fillCheckOnly('https://cloud.189.cn/t/uQ7vMzbMZvQn', 'pan189')">只测 check</button>
+            </div>
+          </article>
+          <article class="example">
+            <strong>189 缺少访问码</strong>
+            <code>https://cloud.189.cn/t/yYvIvyVfY7rm</code>
+            <div class="button-row" style="margin-top: 12px;">
+              <button type="button" onclick="fillCheckOnly('https://cloud.189.cn/t/yYvIvyVfY7rm', 'pan189')">只测 check</button>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -282,6 +320,7 @@
             <select id="share-provider" name="share-provider">
               <option value="pan123">123 云盘</option>
               <option value="pan115">115 网盘</option>
+              <option value="pan189">189 天翼云盘</option>
             </select>
           </div>
           <div>
@@ -311,6 +350,8 @@
           <li><code>files</code> 模式会只返回文件，并把完整路径塞进 <code>path</code>。</li>
           <li><code>tree</code> 模式会返回一个根节点，下面保留目录层级。</li>
           <li>如果链接缺少提取码或提取码错误，<code>/api/115/share/list</code> 和 <code>/api/123/share/list</code> 都会直接返回结构化错误。</li>
+          <li>189 支持 <code>/web/share?code=</code>、<code>/t/</code> 两种链接，访问码可写在查询参数，也可嵌在 <code>code</code> 值里，例如 <code>（访问码：xw6v）</code>。</li>
+          <li>189 常见 <code>reason</code>：<code>share_available</code>、<code>share_not_found</code>、<code>share_audit_blocked</code>、<code>missing_access_code</code>、<code>invalid_access_code</code>。</li>
         </ul>
       </section>
       <section class="panel">
@@ -340,6 +381,9 @@
     function detectProvider(url) {
       try {
         const hostname = new URL(url).hostname.toLowerCase();
+        if (hostname.includes("cloud.189.cn") || hostname.includes("h5.cloud.189.cn")) {
+          return "pan189";
+        }
         if (hostname.includes("123")) {
           return "pan123";
         }
@@ -350,7 +394,13 @@
     }
 
     function listEndpoint(provider) {
-      return provider === "pan123" ? "/api/123/share/list" : "/api/115/share/list";
+      if (provider === "pan123") {
+        return "/api/123/share/list";
+      }
+      if (provider === "pan189") {
+        return "/api/189/share/list";
+      }
+      return "/api/115/share/list";
     }
 
     function useExample(url, listType, provider) {
@@ -412,9 +462,10 @@
     }
 
     writeJson({
-      hint: "选择示例或者直接输入 115 / 123 链接，然后选择 provider 和 list_type。",
+      hint: "选择示例或者直接输入 115 / 123 / 189 链接，然后选择 provider 和 list_type。",
       list_api_115: "/api/115/share/list",
       list_api_123: "/api/123/share/list",
+      list_api_189: "/api/189/share/list",
       check_api: "/api/check"
     });
   </script>

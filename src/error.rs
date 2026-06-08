@@ -22,6 +22,8 @@ pub enum ShareListError {
     InvalidPan115ShareUrl,
     #[error("invalid 123 share URL")]
     InvalidPan123ShareUrl,
+    #[error("invalid 189 share URL")]
+    InvalidPan189ShareUrl,
     #[error("share requires receive code")]
     MissingReceiveCode,
     #[error("share receive code is invalid")]
@@ -109,6 +111,10 @@ impl From<ShareListError> for ApiError {
             ShareListError::InvalidPan123ShareUrl => Self::bad_request(
                 "invalid_pan123_share_url",
                 "expected a 123 share URL like https://www.123865.com/s/<share_key>?pwd=<code> or https://www.123pan.com/s/<share_key>?pwd=<code>",
+            ),
+            ShareListError::InvalidPan189ShareUrl => Self::bad_request(
+                "invalid_pan189_share_url",
+                "expected an 189 share URL like https://cloud.189.cn/t/<share_code>?accessCode=<code> or https://cloud.189.cn/web/share?code=<share_code>",
             ),
             ShareListError::MissingReceiveCode => {
                 Self::bad_request("missing_receive_code", "share requires a receive code")

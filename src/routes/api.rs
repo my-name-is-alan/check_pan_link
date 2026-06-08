@@ -4,7 +4,8 @@ use crate::{
     app::AppState,
     checker::{
         CheckRequest, CheckResult, Pan115ShareListRequest, Pan115ShareListResponse,
-        Pan123ShareListRequest, Pan123ShareListResponse,
+        Pan123ShareListRequest, Pan123ShareListResponse, Pan189ShareListRequest,
+        Pan189ShareListResponse,
     },
     error::ApiError,
 };
@@ -30,5 +31,13 @@ pub async fn list_pan123_share(
     Json(payload): Json<Pan123ShareListRequest>,
 ) -> Result<Json<Pan123ShareListResponse>, ApiError> {
     let result = state.checker.list_pan123_share(payload).await?;
+    Ok(Json(result))
+}
+
+pub async fn list_pan189_share(
+    State(state): State<AppState>,
+    Json(payload): Json<Pan189ShareListRequest>,
+) -> Result<Json<Pan189ShareListResponse>, ApiError> {
+    let result = state.checker.list_pan189_share(payload).await?;
     Ok(Json(result))
 }

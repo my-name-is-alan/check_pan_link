@@ -188,7 +188,6 @@ fn visit_entries_for_flat(
             name: entry.name,
             path,
             size: entry.size,
-            etag: entry.etag.filter(|value| !value.is_empty()),
             category: entry.category,
             status: entry.status,
         });
@@ -239,7 +238,6 @@ fn build_tree_children<'a>(
                 name: entry.name,
                 path,
                 size: entry.size,
-                etag: entry.etag.filter(|value| !value.is_empty()),
                 category: entry.category,
                 status: entry.status,
             });
@@ -556,7 +554,6 @@ struct ShareEntry {
     parent_file_id: String,
     name: String,
     size: u64,
-    etag: Option<String>,
     category: Option<i64>,
     status: Option<i64>,
     file_type: i64,
@@ -579,7 +576,6 @@ impl From<ShareGetEntry> for ShareEntry {
                 .unwrap_or_else(|| "0".to_string()),
             name: value.file_name,
             size: value.size,
-            etag: value.etag,
             category: value.category,
             status: value.status,
             file_type: value.file_type,

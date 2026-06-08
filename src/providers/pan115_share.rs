@@ -181,7 +181,6 @@ fn visit_entries_for_flat(
             name: entry.name,
             path,
             size: entry.size,
-            sha1: entry.sha1.filter(|value| !value.is_empty()),
             extension: entry.extension.filter(|value| !value.is_empty()),
         });
     }
@@ -230,7 +229,6 @@ fn build_tree_children<'a>(
                 name: entry.name,
                 path,
                 size: entry.size,
-                sha1: entry.sha1.filter(|value| !value.is_empty()),
                 extension: entry.extension.filter(|value| !value.is_empty()),
             });
         }
@@ -495,7 +493,6 @@ struct ShareEntry {
     parent_cid: Option<String>,
     name: String,
     size: u64,
-    sha1: Option<String>,
     extension: Option<String>,
     file_category: i64,
 }
@@ -520,7 +517,6 @@ impl From<ShareListEntry> for ShareEntry {
             parent_cid,
             name: value.n,
             size: value.s,
-            sha1: value.sha,
             extension: value.ico,
             file_category: value.fc,
         }

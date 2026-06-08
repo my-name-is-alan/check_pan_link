@@ -5,7 +5,10 @@ mod pan115_headers;
 pub mod pan115_share;
 pub mod pan123;
 pub mod pan123_share;
+mod pan189_api;
+mod pan189_parse;
 pub mod pan189;
+pub mod pan189_share;
 
 use std::sync::Arc;
 
