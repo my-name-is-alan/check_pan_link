@@ -11,15 +11,14 @@ pub(crate) fn extract_share_code(url: &Url) -> Option<String> {
 }
 
 pub(crate) fn extract_access_code(url: &Url) -> Option<String> {
-    extract_access_code_from_query(url).or_else(|| {
-        extract_raw_share_token(url).and_then(|raw| extract_embedded_access_code(&raw))
-    })
+    extract_access_code_from_query(url)
+        .or_else(|| extract_access_code_from_fragment_query(url))
+        .or_else(|| extract_raw_share_token(url).and_then(|raw| extract_embedded_access_code(&raw)))
 }
 
 pub(crate) fn normalize_share_url(share_code: &str, access_code: Option<&str>) -> String {
-    let mut normalized =
-        Url::parse(&format!("https://cloud.189.cn/t/{share_code}"))
-            .expect("canonical 189 share url should be valid");
+    let mut normalized = Url::parse(&format!("https://cloud.189.cn/t/{share_code}"))
+        .expect("canonical 189 share url should be valid");
 
     if let Some(access_code) = access_code {
         normalized
@@ -35,6 +34,14 @@ fn extract_raw_share_token(url: &Url) -> Option<String> {
         return Some(raw);
     }
 
+    if let Some(raw) = extract_raw_share_code_from_path(url) {
+        return Some(raw);
+    }
+
+    extract_raw_share_code_from_fragment(url)
+}
+
+fn extract_raw_share_code_from_path(url: &Url) -> Option<String> {
     let mut segments = url.path_segments()?;
     match (segments.next(), segments.next()) {
         (Some("t"), Some(raw)) if !raw.is_empty() => Some(raw.to_string()),
@@ -53,15 +60,36 @@ fn extract_raw_share_code_from_query(url: &Url) -> Option<String> {
         .map(|(_, value)| value.into_owned())
 }
 
+fn extract_raw_share_code_from_fragment(url: &Url) -> Option<String> {
+    let fragment = url.fragment()?.trim_start_matches('/');
+    let mut segments = fragment.split('/');
+
+    match (segments.next(), segments.next()) {
+        (Some("t"), Some(raw)) if !raw.is_empty() => Some(raw.to_string()),
+        _ => None,
+    }
+}
+
 fn extract_access_code_from_query(url: &Url) -> Option<String> {
     url.query_pairs()
-        .find(|(key, value)| {
-            matches!(
-                key.as_ref(),
-                "accessCode" | "access_code" | "password" | "pwd" | "receive_code"
-            ) && !value.is_empty()
-        })
+        .find(|(key, value)| is_access_code_key(key.as_ref()) && !value.is_empty())
         .map(|(_, value)| value.into_owned())
+}
+
+fn extract_access_code_from_fragment_query(url: &Url) -> Option<String> {
+    let raw = extract_raw_share_code_from_fragment(url)?;
+    let (_, query) = raw.split_once('?')?;
+
+    url::form_urlencoded::parse(query.as_bytes())
+        .find(|(key, value)| is_access_code_key(key.as_ref()) && !value.is_empty())
+        .map(|(_, value)| value.into_owned())
+}
+
+fn is_access_code_key(key: &str) -> bool {
+    matches!(
+        key,
+        "accessCode" | "access_code" | "password" | "pwd" | "receive_code"
+    )
 }
 
 fn parse_share_code(raw: &str) -> String {
@@ -143,5 +171,21 @@ mod tests {
 
         assert_eq!(extract_share_code(&url).as_deref(), Some("UreieiIZJbU3"));
         assert_eq!(extract_access_code(&url).as_deref(), Some("xw6v"));
+    }
+
+    #[test]
+    fn extracts_share_code_from_h5_fragment_route() {
+        let url = Url::parse("https://h5.cloud.189.cn/share.html#/t/jYRVb2rmuaIr").unwrap();
+
+        assert_eq!(extract_share_code(&url).as_deref(), Some("jYRVb2rmuaIr"));
+    }
+
+    #[test]
+    fn extracts_access_code_from_h5_fragment_route_query() {
+        let url = Url::parse("https://h5.cloud.189.cn/share.html#/t/yYvIvyVfY7rm?accessCode=1hit")
+            .unwrap();
+
+        assert_eq!(extract_share_code(&url).as_deref(), Some("yYvIvyVfY7rm"));
+        assert_eq!(extract_access_code(&url).as_deref(), Some("1hit"));
     }
 }

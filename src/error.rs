@@ -24,12 +24,18 @@ pub enum ShareListError {
     InvalidPan123ShareUrl,
     #[error("invalid 189 share URL")]
     InvalidPan189ShareUrl,
+    #[error("invalid Guangya share URL")]
+    InvalidGuangyaShareUrl,
     #[error("share requires receive code")]
     MissingReceiveCode,
+    #[error("189 share requires access code")]
+    MissingAccessCode,
     #[error("share receive code is invalid")]
     InvalidReceiveCode,
     #[error("share code is invalid")]
     InvalidShareCode,
+    #[error("share has expired")]
+    ShareExpired,
     #[error("failed to request share list: {0}")]
     RequestFailed(String),
     #[error("failed to parse share list response: {0}")]
@@ -116,15 +122,24 @@ impl From<ShareListError> for ApiError {
                 "invalid_pan189_share_url",
                 "expected an 189 share URL like https://cloud.189.cn/t/<share_code>?accessCode=<code> or https://cloud.189.cn/web/share?code=<share_code>",
             ),
+            ShareListError::InvalidGuangyaShareUrl => Self::bad_request(
+                "invalid_guangya_share_url",
+                "expected a Guangya share URL like https://www.guangyapan.com/s/<share_id>?code=<code>",
+            ),
             ShareListError::MissingReceiveCode => {
                 Self::bad_request("missing_receive_code", "share requires a receive code")
             }
+            ShareListError::MissingAccessCode => Self::bad_request(
+                "missing_access_code",
+                "189 share requires accessCode; URL code= is the share code, not the access code",
+            ),
             ShareListError::InvalidReceiveCode => {
                 Self::bad_request("invalid_receive_code", "share receive code is invalid")
             }
             ShareListError::InvalidShareCode => {
                 Self::bad_request("invalid_share_code", "share code is invalid or inactive")
             }
+            ShareListError::ShareExpired => Self::bad_request("share_expired", "share has expired"),
             ShareListError::RequestFailed(message) => {
                 Self::bad_gateway("share_list_request_failed", message)
             }
@@ -158,4 +173,19 @@ struct ErrorResponse {
 struct ErrorBody {
     code: &'static str,
     message: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_missing_access_code_to_pan189_specific_api_error() {
+        let error = ApiError::from(ShareListError::MissingAccessCode);
+
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(error.code, "missing_access_code");
+        assert!(error.message.contains("accessCode"));
+        assert!(error.message.contains("code="));
+    }
 }

@@ -20,6 +20,7 @@ pub const API_CHECK_PATH: &str = "/api/check";
 pub const API_PAN115_SHARE_LIST_PATH: &str = "/api/115/share/list";
 pub const API_PAN123_SHARE_LIST_PATH: &str = "/api/123/share/list";
 pub const API_PAN189_SHARE_LIST_PATH: &str = "/api/189/share/list";
+pub const API_GUANGYA_SHARE_LIST_PATH: &str = "/api/guangya/share/list";
 pub const DEMO_PATH: &str = "/demo";
 pub const TELEGRAM_WEBHOOK_PATH: &str = "/telegram/webhook";
 
@@ -35,6 +36,7 @@ pub fn router(state: AppState) -> Router {
         .route(API_PAN115_SHARE_LIST_PATH, post(api::list_pan115_share))
         .route(API_PAN123_SHARE_LIST_PATH, post(api::list_pan123_share))
         .route(API_PAN189_SHARE_LIST_PATH, post(api::list_pan189_share))
+        .route(API_GUANGYA_SHARE_LIST_PATH, post(api::list_guangya_share))
         .route(DEMO_PATH, get(demo::page))
         .route(TELEGRAM_WEBHOOK_PATH, post(telegram::webhook))
         .with_state(state)
@@ -67,6 +69,7 @@ mod tests {
         assert!(API_PAN115_SHARE_LIST_PATH.starts_with("/api/"));
         assert!(API_PAN123_SHARE_LIST_PATH.starts_with("/api/"));
         assert!(API_PAN189_SHARE_LIST_PATH.starts_with("/api/"));
+        assert!(API_GUANGYA_SHARE_LIST_PATH.starts_with("/api/"));
         assert!(TELEGRAM_WEBHOOK_PATH.starts_with("/telegram/"));
         assert!(!HEALTH_PATH.starts_with("/api/"));
         assert!(!HEALTH_PATH.starts_with("/telegram/"));

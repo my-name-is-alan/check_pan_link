@@ -51,7 +51,7 @@ pub(crate) async fn list_share_with_endpoint(
     let share_state = root_listing.share_state;
     let share_state_label = share_state.map(|state| share_state_label(state).to_string());
 
-    let (root_cid, root_entries) = collapse_share_root_if_needed(
+    let (root_cid, root_entries, root_path) = collapse_share_root_if_needed(
         &context.client,
         endpoint,
         &share_code,
@@ -60,7 +60,6 @@ pub(crate) async fn list_share_with_endpoint(
         root_listing.entries,
     )
     .await?;
-    let root_path = root_name.clone();
 
     let payload = match list_type {
         Pan115ListType::Files => {
@@ -124,17 +123,17 @@ async fn collapse_share_root_if_needed(
     receive_code: Option<&str>,
     share_title: &str,
     entries: Vec<ShareEntry>,
-) -> Result<(String, Vec<ShareEntry>), ShareListError> {
+) -> Result<(String, Vec<ShareEntry>, String), ShareListError> {
     if let [entry] = entries.as_slice() {
         if entry.is_folder() && entry.name == share_title {
             let root_cid = entry.cid.clone().unwrap_or_default();
             let listing =
                 fetch_folder_listing(client, endpoint, share_code, receive_code, &root_cid).await?;
-            return Ok((root_cid, listing.entries));
+            return Ok((root_cid, listing.entries, share_title.to_string()));
         }
     }
 
-    Ok(("0".to_string(), entries))
+    Ok(("0".to_string(), entries, String::new()))
 }
 
 async fn collect_flat_files(
@@ -323,7 +322,6 @@ async fn fetch_share_snap_page(
 
     let request_url = Url::parse_with_params(endpoint, &query_params)
         .map_err(|_| ShareListError::RequestFailed("invalid share list endpoint".to_string()))?;
-
     let response = with_share_snap_headers(client.get(request_url))
         .send()
         .await
@@ -463,8 +461,6 @@ struct ShareListEntry {
     s: u64,
     #[serde(default)]
     fc: i64,
-    #[serde(default)]
-    sha: Option<String>,
     #[serde(default)]
     ico: Option<String>,
 }
@@ -610,6 +606,60 @@ mod tests {
         assert_eq!(tree.children.len(), 2);
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn lists_root_level_multi_file_share_without_summary_title_path_prefix() {
+        let endpoint = spawn_share_api(mock_root_level_multi_file_responses()).await;
+        let original_url = "https://115cdn.com/s/swsh7q83fwl?password=de72".to_string();
+        let context = build_direct_context(&original_url);
+
+        let response = super::list_share_with_endpoint(context, Pan115ListType::Files, &endpoint)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.share_title.as_deref(),
+            Some("Episode 01.mkv等2个文件")
+        );
+
+        let Pan115ShareListPayload::Files { files } = response.payload else {
+            panic!("expected flat file payload");
+        };
+        let paths = files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(paths, vec!["Episode 01.mkv", "Episode 02.mkv"]);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn builds_root_level_multi_file_tree_without_summary_title_child_prefix() {
+        let endpoint = spawn_share_api(mock_root_level_multi_file_responses()).await;
+        let original_url = "https://115cdn.com/s/swsh7q83fwl?password=de72".to_string();
+        let context = build_direct_context(&original_url);
+
+        let response = super::list_share_with_endpoint(context, Pan115ListType::Tree, &endpoint)
+            .await
+            .unwrap();
+
+        let Pan115ShareListPayload::Tree { tree } = response.payload else {
+            panic!("expected tree payload");
+        };
+        assert_eq!(tree.name, "Episode 01.mkv等2个文件");
+        assert_eq!(tree.path, "");
+
+        let paths = tree
+            .children
+            .iter()
+            .map(|node| match node {
+                crate::checker::Pan115ShareNode::File { path, .. } => path.as_str(),
+                crate::checker::Pan115ShareNode::Folder { .. } => panic!("expected only files"),
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(paths, vec!["Episode 01.mkv", "Episode 02.mkv"]);
+    }
+
     #[tokio::test]
     async fn parses_live_style_numeric_folder_identifiers() {
         let endpoint = spawn_share_api(mock_live_style_numeric_responses()).await;
@@ -745,7 +795,19 @@ mod tests {
     }
 
     fn build_service() -> LinkCheckerService {
-        LinkCheckerService::new(std::time::Duration::from_secs(1)).unwrap()
+        LinkCheckerService::new_without_proxy(std::time::Duration::from_secs(10)).unwrap()
+    }
+
+    fn build_direct_context(original_url: &str) -> crate::providers::common::CheckContext {
+        crate::providers::common::CheckContext {
+            original_url: original_url.to_string(),
+            url: url::Url::parse(original_url).unwrap(),
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .no_proxy()
+                .build()
+                .unwrap(),
+        }
     }
 
     fn mock_nested_share_responses() -> BTreeMap<String, Value> {
@@ -987,6 +1049,54 @@ mod tests {
                 }),
             ),
         ])
+    }
+
+    fn mock_root_level_multi_file_responses() -> BTreeMap<String, Value> {
+        BTreeMap::from([(
+            key("0", 0),
+            json!({
+                "state": true,
+                "error": "",
+                "errno": 0,
+                "data": {
+                    "shareinfo": {
+                        "share_state": 1,
+                        "share_title": "Episode 01.mkv等2个文件",
+                        "forbid_reason": "",
+                        "file_size": 2,
+                        "has_receive_code": 1,
+                        "have_vio_file": 0,
+                        "share_duration": -1,
+                        "expire_time": -1
+                    },
+                    "count": 2,
+                    "list": [
+                        {
+                            "fid": "file-1",
+                            "cid": 0,
+                            "n": "Episode 01.mkv",
+                            "s": 100,
+                            "fc": 1,
+                            "sha": "sha1-1",
+                            "ico": "mkv",
+                            "t": "1767257089",
+                            "fl": []
+                        },
+                        {
+                            "fid": "file-2",
+                            "cid": 0,
+                            "n": "Episode 02.mkv",
+                            "s": 200,
+                            "fc": 1,
+                            "sha": "sha1-2",
+                            "ico": "mkv",
+                            "t": "1767257090",
+                            "fl": []
+                        }
+                    ]
+                }
+            }),
+        )])
     }
 
     fn key(cid: &str, offset: usize) -> String {

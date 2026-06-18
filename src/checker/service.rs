@@ -5,14 +5,14 @@ use url::Url;
 
 use crate::{
     checker::model::{
-        CheckRequest, CheckResult, Pan115ShareListRequest, Pan115ShareListResponse,
-        Pan123ShareListRequest, Pan123ShareListResponse, Pan189ShareListRequest,
-        Pan189ShareListResponse, Provider,
+        CheckRequest, CheckResult, GuangyaShareListRequest, GuangyaShareListResponse,
+        Pan115ShareListRequest, Pan115ShareListResponse, Pan123ShareListRequest,
+        Pan123ShareListResponse, Pan189ShareListRequest, Pan189ShareListResponse, Provider,
     },
     error::{ApiError, CheckError},
     providers::{
-        CheckContext, ProviderRegistry, common::host_is_or_subdomain, pan115_share, pan123_share,
-        pan189_share,
+        CheckContext, ProviderRegistry, common::host_is_or_subdomain, guangya_share, pan115_share,
+        pan123_share, pan189_share,
     },
 };
 
@@ -31,6 +31,21 @@ impl LinkCheckerService {
             .timeout(timeout)
             .redirect(Policy::limited(5))
             .user_agent("check-pan-link/0.1")
+            .build()?;
+
+        Ok(Self {
+            client,
+            providers: ProviderRegistry::default(),
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_without_proxy(timeout: Duration) -> Result<Self, CheckError> {
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .redirect(Policy::limited(5))
+            .user_agent("check-pan-link/0.1")
+            .no_proxy()
             .build()?;
 
         Ok(Self {
@@ -79,6 +94,17 @@ impl LinkCheckerService {
         let context = self.build_pan189_context(request.url)?;
 
         pan189_share::list_share(context, request.list_type)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn list_guangya_share(
+        &self,
+        request: GuangyaShareListRequest,
+    ) -> Result<GuangyaShareListResponse, ApiError> {
+        let context = self.build_guangya_context(request.url)?;
+
+        guangya_share::list_share(context, request.list_type)
             .await
             .map_err(Into::into)
     }
@@ -139,6 +165,23 @@ impl LinkCheckerService {
         })
     }
 
+    fn build_guangya_context(&self, original_url: String) -> Result<CheckContext, ApiError> {
+        let url = parse_http_url(&original_url).map_err(ApiError::from)?;
+
+        if self.detect_provider(&url) != Provider::GuangyaPan {
+            return Err(ApiError::bad_request(
+                "invalid_guangya_share_url",
+                "expected a Guangya share URL like https://www.guangyapan.com/s/<share_id>?code=<code>",
+            ));
+        }
+
+        Ok(CheckContext {
+            original_url,
+            url,
+            client: self.client.clone(),
+        })
+    }
+
     #[cfg(test)]
     pub(crate) async fn list_pan115_share_with_endpoint(
         &self,
@@ -188,29 +231,6 @@ impl LinkCheckerService {
             share_get_endpoint,
         )
         .await
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn list_pan189_share_with_endpoint(
-        &self,
-        request: Pan189ShareListRequest,
-        list_endpoint: &str,
-    ) -> Result<Pan189ShareListResponse, ShareListError> {
-        let url =
-            parse_http_url(&request.url).map_err(|_| ShareListError::InvalidPan189ShareUrl)?;
-
-        if self.detect_provider(&url) != Provider::Pan189 {
-            return Err(ShareListError::InvalidPan189ShareUrl);
-        }
-
-        let context = CheckContext {
-            original_url: request.url,
-            url,
-            client: self.client.clone(),
-        };
-
-        pan189_share::list_share_with_endpoints(context, request.list_type, Some(list_endpoint))
-            .await
     }
 }
 
@@ -322,6 +342,13 @@ mod tests {
                 &Url::parse("https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat").unwrap()
             ),
             Provider::Pan123
+        );
+        assert_eq!(
+            checker.detect_provider(
+                &Url::parse("https://www.guangyapan.com/s/1910961250145955889_adz3Lo8EdLN_2BBy",)
+                    .unwrap()
+            ),
+            Provider::GuangyaPan
         );
         assert_eq!(
             checker.detect_provider(&Url::parse("https://example.com/share").unwrap()),

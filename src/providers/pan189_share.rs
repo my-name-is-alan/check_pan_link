@@ -32,18 +32,17 @@ pub(crate) async fn list_share_with_endpoints(
     list_type: Pan189ListType,
     list_endpoint: Option<&str>,
 ) -> Result<Pan189ShareListResponse, ShareListError> {
-    let share_code =
-        extract_share_code(&context.url).ok_or(ShareListError::InvalidPan189ShareUrl)?;
-    let access_code = extract_access_code(&context.url);
-    let normalized_url = normalize_share_url(&share_code, access_code.as_deref());
-    let session = resolve_share_session(&context.client, &share_code, access_code.as_deref()).await?;
+    let link = parse_share_link(&context.url)?;
+    let share_code = link.share_code.as_str();
+    let session =
+        resolve_share_session(&context.client, share_code, link.access_code.as_deref()).await?;
 
     let share_name = if session.file_name.is_empty() {
         None
     } else {
         Some(session.file_name.clone())
     };
-    let root_name = share_name.clone().unwrap_or_else(|| share_code.clone());
+    let root_name = share_name.clone().unwrap_or_else(|| share_code.to_string());
     let root_listing = fetch_folder_listing(
         &context.client,
         list_endpoint,
@@ -106,10 +105,10 @@ pub(crate) async fn list_share_with_endpoints(
 
     Ok(Pan189ShareListResponse {
         original_url: context.original_url,
-        normalized_url,
+        normalized_url: link.normalized_url,
         provider: Provider::Pan189,
         list_type,
-        share_code,
+        share_code: link.share_code,
         access_code: if session.access_code.is_empty() {
             None
         } else {
@@ -129,6 +128,25 @@ struct ShareEntry {
     name: String,
     size: u64,
     is_folder: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ShareLink {
+    share_code: String,
+    access_code: Option<String>,
+    normalized_url: String,
+}
+
+fn parse_share_link(url: &url::Url) -> Result<ShareLink, ShareListError> {
+    let share_code = extract_share_code(url).ok_or(ShareListError::InvalidPan189ShareUrl)?;
+    let access_code = extract_access_code(url);
+    let normalized_url = normalize_share_url(&share_code, access_code.as_deref());
+
+    Ok(ShareLink {
+        share_code,
+        access_code,
+        normalized_url,
+    })
 }
 
 async fn collapse_share_root_if_needed(
@@ -269,12 +287,7 @@ async fn fetch_folder_listing(
     loop {
         let body = if let Some(endpoint) = list_endpoint {
             fetch_list_page_with_endpoint(
-                client,
-                endpoint,
-                share_code,
-                session,
-                folder_id,
-                page_num,
+                client, endpoint, share_code, session, folder_id, page_num,
             )
             .await?
         } else {
@@ -339,13 +352,11 @@ async fn fetch_list_page_with_endpoint(
     )
     .expect("mock pan189 list endpoint should always be valid");
 
-    let response = crate::providers::pan189_api::with_share_headers(
-        client.get(request_url),
-        share_code,
-    )
-        .send()
-        .await
-        .map_err(|error| ShareListError::RequestFailed(error.to_string()))?;
+    let response =
+        crate::providers::pan189_api::with_share_headers(client.get(request_url), share_code)
+            .send()
+            .await
+            .map_err(|error| ShareListError::RequestFailed(error.to_string()))?;
 
     response
         .json::<ListShareDirBody>()
@@ -380,5 +391,26 @@ fn join_path(base: &str, name: &str) -> String {
         name.to_string()
     } else {
         format!("{base}/{name}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use url::Url;
+
+    #[test]
+    fn parses_h5_fragment_route_for_file_listing() {
+        let url = Url::parse("https://h5.cloud.189.cn/share.html#/t/yYvIvyVfY7rm?accessCode=1hit")
+            .unwrap();
+
+        let link = parse_share_link(&url).unwrap();
+
+        assert_eq!(link.share_code, "yYvIvyVfY7rm");
+        assert_eq!(link.access_code.as_deref(), Some("1hit"));
+        assert_eq!(
+            link.normalized_url,
+            "https://cloud.189.cn/t/yYvIvyVfY7rm?accessCode=1hit"
+        );
     }
 }

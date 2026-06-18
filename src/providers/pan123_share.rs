@@ -523,8 +523,6 @@ struct ShareGetEntry {
     file_type: i64,
     #[serde(rename = "Size", default)]
     size: u64,
-    #[serde(rename = "Etag", default)]
-    etag: Option<String>,
     #[serde(rename = "Category", default)]
     category: Option<i64>,
     #[serde(rename = "Status", default)]
@@ -717,7 +715,7 @@ mod tests {
     }
 
     fn build_service() -> LinkCheckerService {
-        LinkCheckerService::new(std::time::Duration::from_secs(1)).unwrap()
+        LinkCheckerService::new_without_proxy(std::time::Duration::from_secs(10)).unwrap()
     }
 
     fn mock_share_info(has_pwd: bool) -> Value {

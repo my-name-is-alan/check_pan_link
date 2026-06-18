@@ -1,13 +1,15 @@
 pub mod common;
 pub mod generic;
+pub mod guangya;
+pub mod guangya_share;
 pub mod pan115;
 mod pan115_headers;
 pub mod pan115_share;
 pub mod pan123;
 pub mod pan123_share;
+pub mod pan189;
 mod pan189_api;
 mod pan189_parse;
-pub mod pan189;
 pub mod pan189_share;
 
 use std::sync::Arc;
@@ -18,8 +20,8 @@ use crate::{
     checker::{CheckResult, Provider},
     error::CheckError,
     providers::{
-        generic::GenericChecker, pan115::Pan115Checker, pan123::Pan123Checker,
-        pan189::Pan189Checker,
+        generic::GenericChecker, guangya::GuangyaPanChecker, pan115::Pan115Checker,
+        pan123::Pan123Checker, pan189::Pan189Checker,
     },
 };
 
@@ -55,6 +57,7 @@ impl Default for ProviderRegistry {
                 Arc::new(Pan115Checker),
                 Arc::new(Pan189Checker),
                 Arc::new(Pan123Checker),
+                Arc::new(GuangyaPanChecker),
                 Arc::new(GenericChecker),
             ],
         }

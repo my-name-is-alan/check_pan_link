@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>115 / 123 / 189 Share Demo</title>
+  <title>115 / 123 / 189 / 光鸭 Share Demo</title>
   <style>
     :root {
       --bg: #f2efe7;
@@ -221,13 +221,14 @@
   <main>
     <section class="hero">
       <span class="eyebrow">Built-in demo</span>
-      <h1>115 / 123 / 189 Share Demo</h1>
-      <p>这个页面直接调用当前服务里的检查和文件列表接口：<code>/api/check</code>、<code>/api/115/share/list</code>、<code>/api/123/share/list</code>、<code>/api/189/share/list</code>。可以测分享状态，也可以切换 provider 和 <code>files</code> / <code>tree</code> 看目录返回。</p>
+      <h1>115 / 123 / 189 / 光鸭 Share Demo</h1>
+      <p>这个页面直接调用当前服务里的检查和文件列表接口：<code>/api/check</code>、<code>/api/115/share/list</code>、<code>/api/123/share/list</code>、<code>/api/189/share/list</code>、<code>/api/guangya/share/list</code>。可以测分享状态，也可以切换 provider 和 <code>files</code> / <code>tree</code> 看目录返回。</p>
       <div class="meta">
         <span>Check API: <code>POST /api/check</code></span>
         <span>List API: <code>POST /api/115/share/list</code></span>
         <span>List API: <code>POST /api/123/share/list</code></span>
         <span>List API: <code>POST /api/189/share/list</code></span>
+        <span>List API: <code>POST /api/guangya/share/list</code></span>
       </div>
     </section>
 
@@ -305,6 +306,30 @@
               <button type="button" onclick="fillCheckOnly('https://cloud.189.cn/t/yYvIvyVfY7rm', 'pan189')">只测 check</button>
             </div>
           </article>
+          <article class="example">
+            <strong>189 短链（自动跳转）</strong>
+            <code>https://cloud.189.cn/t/jYRVb2rmuaIr</code>
+            <div class="button-row" style="margin-top: 12px;">
+              <button type="button" onclick="useExample('https://cloud.189.cn/t/jYRVb2rmuaIr', 'files', 'pan189')">填充 files</button>
+              <button type="button" class="secondary" onclick="useExample('https://cloud.189.cn/t/jYRVb2rmuaIr', 'tree', 'pan189')">填充 tree</button>
+            </div>
+          </article>
+          <article class="example">
+            <strong>光鸭云盘（带提取码）</strong>
+            <code>https://www.guangyapan.com/s/1910961611262906426_adz3Lo8EdLN_2BBy?code=bmiu</code>
+            <div class="button-row" style="margin-top: 12px;">
+              <button type="button" onclick="useExample('https://www.guangyapan.com/s/1910961611262906426_adz3Lo8EdLN_2BBy?code=bmiu', 'files', 'guangya_pan')">填充 files</button>
+              <button type="button" class="secondary" onclick="useExample('https://www.guangyapan.com/s/1910961611262906426_adz3Lo8EdLN_2BBy?code=bmiu', 'tree', 'guangya_pan')">填充 tree</button>
+            </div>
+          </article>
+          <article class="example">
+            <strong>光鸭云盘（无提取码参数）</strong>
+            <code>https://www.guangyapan.com/s/1910961250145955889_adz3Lo8EdLN_2BBy</code>
+            <div class="button-row" style="margin-top: 12px;">
+              <button type="button" onclick="useExample('https://www.guangyapan.com/s/1910961250145955889_adz3Lo8EdLN_2BBy', 'files', 'guangya_pan')">填充 files</button>
+              <button type="button" class="secondary" onclick="useExample('https://www.guangyapan.com/s/1910961250145955889_adz3Lo8EdLN_2BBy', 'tree', 'guangya_pan')">填充 tree</button>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -321,6 +346,7 @@
               <option value="pan123">123 云盘</option>
               <option value="pan115">115 网盘</option>
               <option value="pan189">189 天翼云盘</option>
+              <option value="guangya_pan">光鸭云盘</option>
             </select>
           </div>
           <div>
@@ -350,8 +376,10 @@
           <li><code>files</code> 模式会只返回文件，并把完整路径塞进 <code>path</code>。</li>
           <li><code>tree</code> 模式会返回一个根节点，下面保留目录层级。</li>
           <li>如果链接缺少提取码或提取码错误，<code>/api/115/share/list</code> 和 <code>/api/123/share/list</code> 都会直接返回结构化错误。</li>
-          <li>189 支持 <code>/web/share?code=</code>、<code>/t/</code> 两种链接，访问码可写在查询参数，也可嵌在 <code>code</code> 值里，例如 <code>（访问码：xw6v）</code>。</li>
+          <li>189 支持 <code>/web/share?code=</code>、<code>/t/</code>、<code>h5.cloud.189.cn/share.html#/t/</code> 这几种链接；URL 里的 code 是分享码，不是访问码。</li>
+          <li>189 filelist 会优先使用分享详情里的 <code>shareId</code> 列目录；只有分享详情没有返回 <code>shareId</code> 时，才需要补 <code>accessCode</code>。</li>
           <li>189 常见 <code>reason</code>：<code>share_available</code>、<code>share_not_found</code>、<code>share_audit_blocked</code>、<code>missing_access_code</code>、<code>invalid_access_code</code>。</li>
+          <li>光鸭云盘使用 provider API 判断分享状态，支持提取码校验，并可通过 <code>/api/guangya/share/list</code> 返回 <code>files</code> 或 <code>tree</code>。</li>
         </ul>
       </section>
       <section class="panel">
@@ -384,6 +412,9 @@
         if (hostname.includes("cloud.189.cn") || hostname.includes("h5.cloud.189.cn")) {
           return "pan189";
         }
+        if (hostname.includes("guangyapan.com")) {
+          return "guangya_pan";
+        }
         if (hostname.includes("123")) {
           return "pan123";
         }
@@ -399,6 +430,9 @@
       }
       if (provider === "pan189") {
         return "/api/189/share/list";
+      }
+      if (provider === "guangya_pan") {
+        return "/api/guangya/share/list";
       }
       return "/api/115/share/list";
     }
@@ -428,7 +462,10 @@
       const payload = await response.json();
       if (!response.ok) {
         const message = payload?.error?.message || "request failed";
-        throw new Error(message);
+        const error = new Error(message);
+        error.code = payload?.error?.code || "request_failed";
+        error.payload = payload;
+        throw error;
       }
       return payload;
     }
@@ -447,6 +484,16 @@
 
     async function runList() {
       const endpoint = listEndpoint(providerInput.value);
+      if (!endpoint) {
+        writeJson({
+          error: "光鸭云盘当前只支持 /api/check，暂未接入文件列表接口。",
+          check_api: "/api/check",
+          provider: "guangya_pan"
+        });
+        setStatus("光鸭云盘暂不支持 list", true);
+        return;
+      }
+
       setStatus(`正在调用 ${endpoint} ...`);
       try {
         const payload = await postJson(endpoint, {
@@ -456,16 +503,53 @@
         writeJson(payload);
         setStatus("list 完成");
       } catch (error) {
-        writeJson({ error: String(error.message || error) });
+        if (
+          providerInput.value === "pan189" &&
+          (error.code === "missing_access_code" || error.code === "missing_receive_code")
+        ) {
+          await handlePan189MissingAccessCode();
+          return;
+        }
+
+        writeJson({
+          error: String(error.message || error),
+          code: error.code || "request_failed"
+        });
         setStatus("list 失败", true);
       }
     }
 
+    async function handlePan189MissingAccessCode() {
+      setStatus("189 链接缺少可用 shareId，正在补跑 check ...", true);
+
+      try {
+        const check = await postJson("/api/check", { url: urlInput.value });
+        writeJson({
+          error: "189 分享详情没有返回可直接列目录的 shareId，需要访问码。",
+          hint: "请补上 ?accessCode=xxxx，或者使用带访问码的 189 链接再获取文件列表。注意 URL 里的 code 是分享码，不是访问码。",
+          list_api: "/api/189/share/list",
+          check_api: "/api/check",
+          check
+        });
+      } catch (checkError) {
+        writeJson({
+          error: "189 分享详情没有返回可直接列目录的 shareId，需要访问码。",
+          hint: "请补上 ?accessCode=xxxx，或者使用带访问码的 189 链接再获取文件列表。注意 URL 里的 code 是分享码，不是访问码。",
+          check_error: String(checkError.message || checkError),
+          check_code: checkError.code || "request_failed"
+        });
+      }
+
+      setStatus("189 需要访问码，已展示 check 结果", true);
+    }
+
     writeJson({
-      hint: "选择示例或者直接输入 115 / 123 / 189 链接，然后选择 provider 和 list_type。",
+      hint: "选择示例或者直接输入 115 / 123 / 189 / 光鸭链接，然后选择 provider 和 list_type。",
       list_api_115: "/api/115/share/list",
       list_api_123: "/api/123/share/list",
       list_api_189: "/api/189/share/list",
+      list_api_guangya: "/api/guangya/share/list",
+      guangya_provider: "guangya_pan",
       check_api: "/api/check"
     });
   </script>

@@ -53,6 +53,21 @@ pub struct Pan189ShareListRequest {
     pub list_type: Pan189ListType,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GuangyaListType {
+    #[default]
+    Files,
+    Tree,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GuangyaShareListRequest {
+    pub url: String,
+    #[serde(default)]
+    pub list_type: GuangyaListType,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
@@ -68,6 +83,7 @@ pub enum Provider {
     Pan115,
     Pan189,
     Pan123,
+    GuangyaPan,
     Generic,
 }
 
@@ -77,6 +93,7 @@ impl Provider {
             Self::Pan115 => "pan115",
             Self::Pan189 => "pan189",
             Self::Pan123 => "pan123",
+            Self::GuangyaPan => "guangya_pan",
             Self::Generic => "generic",
         }
     }
@@ -283,6 +300,92 @@ pub struct Pan189ShareListResponse {
     pub file_count: usize,
     #[serde(flatten)]
     pub payload: Pan189ShareListPayload,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GuangyaShareFile {
+    pub file_id: String,
+    pub parent_file_id: String,
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extension: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_type: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audit_status: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audit_status_label: Option<String>,
+    pub is_available: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GuangyaShareFolderNode {
+    pub file_id: String,
+    pub parent_file_id: String,
+    pub name: String,
+    pub path: String,
+    pub children: Vec<GuangyaShareNode>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "node_type", rename_all = "snake_case")]
+pub enum GuangyaShareNode {
+    Folder {
+        file_id: String,
+        parent_file_id: String,
+        name: String,
+        path: String,
+        children: Vec<GuangyaShareNode>,
+    },
+    File {
+        file_id: String,
+        parent_file_id: String,
+        name: String,
+        path: String,
+        size: u64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        extension: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        file_type: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        audit_status: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        audit_status_label: Option<String>,
+        is_available: bool,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "result_type", rename_all = "snake_case")]
+pub enum GuangyaShareListPayload {
+    Files { files: Vec<GuangyaShareFile> },
+    Tree { tree: GuangyaShareFolderNode },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GuangyaShareListResponse {
+    pub original_url: String,
+    pub normalized_url: String,
+    pub provider: Provider,
+    pub list_type: GuangyaListType,
+    pub share_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receive_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub share_title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub share_status: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub share_status_label: Option<String>,
+    pub share_available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub share_user_id: Option<String>,
+    pub need_receive_code: bool,
+    pub file_count: usize,
+    #[serde(flatten)]
+    pub payload: GuangyaShareListPayload,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]

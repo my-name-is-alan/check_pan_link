@@ -24,7 +24,7 @@ pub(crate) struct ShareSession {
     pub access_code: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct ShareInfoBody {
     #[serde(rename = "res_code", default)]
     pub res_code: ApiResCode,
@@ -40,6 +40,8 @@ pub(crate) struct ShareInfoBody {
     pub is_folder: Option<bool>,
     #[serde(rename = "shareMode", default)]
     pub share_mode: Option<i64>,
+    #[serde(rename = "shareId", default)]
+    pub share_id: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -204,15 +206,18 @@ pub(crate) async fn resolve_share_session(
         return Err(ShareListError::Api(info.res_message));
     }
 
-    let needs_access_code = info.need_access_code.is_some_and(|value| value == 1);
-    let resolved_access_code = if needs_access_code {
-        access_code
-            .filter(|value| !value.is_empty())
-            .ok_or(ShareListError::MissingReceiveCode)?
-            .to_string()
-    } else {
-        access_code.unwrap_or("").to_string()
-    };
+    let provided_access_code = access_code.filter(|value| !value.is_empty());
+    if provided_access_code.is_none() {
+        if let Some(session) = direct_share_session_from_info(info.clone(), String::new()) {
+            return Ok(session);
+        }
+
+        if info.need_access_code.is_some_and(|value| value == 1) {
+            return Err(ShareListError::MissingAccessCode);
+        }
+    }
+
+    let resolved_access_code = provided_access_code.unwrap_or("").to_string();
 
     let check = check_access_code(client, share_code, &resolved_access_code).await?;
 
@@ -234,14 +239,27 @@ pub(crate) async fn resolve_share_session(
         ));
     };
 
-    Ok(ShareSession {
+    Ok(build_share_session(info, share_id, resolved_access_code))
+}
+
+fn direct_share_session_from_info(
+    info: ShareInfoBody,
+    access_code: String,
+) -> Option<ShareSession> {
+    let share_id = info.share_id?;
+
+    Some(build_share_session(info, share_id, access_code))
+}
+
+fn build_share_session(info: ShareInfoBody, share_id: i64, access_code: String) -> ShareSession {
+    ShareSession {
         share_id,
         share_mode: info.share_mode.unwrap_or(1),
         file_id: info.file_id,
         is_folder: info.is_folder.unwrap_or(true),
         file_name: info.file_name,
-        access_code: resolved_access_code,
-    })
+        access_code,
+    }
 }
 
 pub(crate) async fn list_share_dir(
@@ -320,5 +338,35 @@ where
         serde_json::Value::Number(number) => Ok(number.to_string()),
         serde_json::Value::Null => Ok(String::new()),
         _ => Err(serde::de::Error::custom("unexpected id value")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builds_session_from_share_info_share_id_without_access_code() {
+        let info: ShareInfoBody = serde_json::from_str(
+            r#"{
+                "res_code": 0,
+                "needAccessCode": 1,
+                "shareId": 12505119723464,
+                "shareMode": 3,
+                "fileId": "624813231786440715",
+                "fileName": "A Chinese Odyssey",
+                "isFolder": true
+            }"#,
+        )
+        .unwrap();
+
+        let session = direct_share_session_from_info(info, String::new()).unwrap();
+
+        assert_eq!(session.share_id, 12505119723464);
+        assert_eq!(session.share_mode, 3);
+        assert_eq!(session.file_id, "624813231786440715");
+        assert_eq!(session.file_name, "A Chinese Odyssey");
+        assert!(session.is_folder);
+        assert!(session.access_code.is_empty());
     }
 }

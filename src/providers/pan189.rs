@@ -8,11 +8,13 @@ use url::Url;
 use crate::{
     checker::{CheckResult, CheckStatus, Provider},
     error::CheckError,
-    providers::common::{CheckContext, ProviderChecker, basic_http_check, host_is_or_subdomain},
+    providers::{
+        common::{CheckContext, ProviderChecker, basic_http_check, host_is_or_subdomain},
+        pan189_parse::{extract_access_code, extract_share_code, normalize_share_url},
+    },
 };
 
-const SHARE_INFO_ENDPOINT: &str =
-    "https://cloud.189.cn/api/open/share/getShareInfoByCodeV2.action";
+const SHARE_INFO_ENDPOINT: &str = "https://cloud.189.cn/api/open/share/getShareInfoByCodeV2.action";
 const CHECK_ACCESS_CODE_ENDPOINT: &str =
     "https://cloud.189.cn/api/open/share/checkAccessCode.action";
 
@@ -41,10 +43,14 @@ impl ProviderChecker for Pan189Checker {
         let access_code = extract_access_code(&context.url);
         let normalized_url = normalize_share_url(&share_code, access_code.as_deref());
 
-        Ok(
-            check_share(context, share_code, access_code, normalized_url, self.provider())
-                .await,
+        Ok(check_share(
+            context,
+            share_code,
+            access_code,
+            normalized_url,
+            self.provider(),
         )
+        .await)
     }
 }
 
@@ -70,17 +76,19 @@ async fn check_share(
             );
 
             match response.json::<ShareInfoResponse>().await {
-                Ok(body) => build_share_info_result(
-                    context.client,
-                    original_url,
-                    normalized_url,
-                    provider,
-                    metadata,
-                    share_code,
-                    access_code,
-                    body,
-                )
-                .await,
+                Ok(body) => {
+                    build_share_info_result(
+                        context.client,
+                        original_url,
+                        normalized_url,
+                        provider,
+                        metadata,
+                        share_code,
+                        access_code,
+                        body,
+                    )
+                    .await
+                }
                 Err(error) => {
                     metadata.insert("error".to_string(), json!(error.to_string()));
                     CheckResult::new(
@@ -155,6 +163,10 @@ async fn build_share_info_result(
 
     if !body.file_id.is_empty() {
         metadata.insert("file_id".to_string(), json!(body.file_id));
+    }
+
+    if let Some(share_id) = body.share_id {
+        metadata.insert("share_id".to_string(), json!(share_id));
     }
 
     if let Some(is_folder) = body.is_folder {
@@ -307,7 +319,14 @@ fn classify_share_info(body: &ShareInfoResponse, access_code_provided: bool) -> 
         return ShareInfoDecision::Return(CheckStatus::Invalid, "share_review_blocked");
     }
 
-    if body.need_access_code.is_some_and(|need_access_code| need_access_code == 1) {
+    if body.share_id.is_some() {
+        return ShareInfoDecision::Return(CheckStatus::Valid, "share_available");
+    }
+
+    if body
+        .need_access_code
+        .is_some_and(|need_access_code| need_access_code == 1)
+    {
         if access_code_provided {
             ShareInfoDecision::VerifyAccessCode
         } else {
@@ -363,20 +382,6 @@ fn with_share_headers(
         )
 }
 
-fn normalize_share_url(share_code: &str, access_code: Option<&str>) -> String {
-    let mut normalized =
-        Url::parse(&format!("https://cloud.189.cn/t/{share_code}"))
-            .expect("canonical 189 share url should be valid");
-
-    if let Some(access_code) = access_code {
-        normalized
-            .query_pairs_mut()
-            .append_pair("accessCode", access_code);
-    }
-
-    normalized.to_string()
-}
-
 fn base_metadata(
     share_code: &str,
     access_code: Option<&str>,
@@ -393,108 +398,6 @@ fn base_metadata(
     }
 
     metadata
-}
-
-fn extract_share_code(url: &Url) -> Option<String> {
-    let share_code = parse_share_code(&extract_raw_share_token(url)?);
-
-    if share_code.is_empty() {
-        None
-    } else {
-        Some(share_code)
-    }
-}
-
-fn extract_raw_share_token(url: &Url) -> Option<String> {
-    if let Some(raw) = extract_raw_share_code_from_query(url) {
-        return Some(raw);
-    }
-
-    let mut segments = url.path_segments()?;
-    match (segments.next(), segments.next()) {
-        (Some("t"), Some(raw)) if !raw.is_empty() => Some(raw.to_string()),
-        _ => None,
-    }
-}
-
-fn extract_raw_share_code_from_query(url: &Url) -> Option<String> {
-    let path = url.path().trim_end_matches('/');
-    if path != "/web/share" {
-        return None;
-    }
-
-    url.query_pairs()
-        .find(|(key, value)| key == "code" && !value.is_empty())
-        .map(|(_, value)| value.into_owned())
-}
-
-fn extract_access_code(url: &Url) -> Option<String> {
-    extract_access_code_from_query(url).or_else(|| {
-        extract_raw_share_token(url).and_then(|raw| extract_embedded_access_code(&raw))
-    })
-}
-
-fn extract_access_code_from_query(url: &Url) -> Option<String> {
-    url.query_pairs()
-        .find(|(key, value)| {
-            matches!(
-                key.as_ref(),
-                "accessCode" | "access_code" | "password" | "pwd" | "receive_code"
-            ) && !value.is_empty()
-        })
-        .map(|(_, value)| value.into_owned())
-}
-
-fn parse_share_code(raw: &str) -> String {
-    raw.trim()
-        .chars()
-        .take_while(|ch| ch.is_ascii_alphanumeric())
-        .collect()
-}
-
-fn extract_embedded_access_code(raw: &str) -> Option<String> {
-    for keyword in ["访问码", "提取码", "密码"] {
-        if let Some(access_code) = extract_access_code_after_keyword(raw, keyword) {
-            return Some(access_code);
-        }
-    }
-
-    extract_access_code_after_keyword_ci(raw, "code")
-}
-
-fn extract_access_code_after_keyword(raw: &str, keyword: &str) -> Option<String> {
-    let index = raw.find(keyword)?;
-    let rest = &raw[index + keyword.len()..];
-
-    parse_access_code_token(rest)
-}
-
-fn extract_access_code_after_keyword_ci(raw: &str, keyword: &str) -> Option<String> {
-    let lower_raw = raw.to_ascii_lowercase();
-    let lower_keyword = keyword.to_ascii_lowercase();
-    let index = lower_raw.find(&lower_keyword)?;
-    let rest = &raw[index + keyword.len()..];
-
-    parse_access_code_token(rest)
-}
-
-fn parse_access_code_token(text: &str) -> Option<String> {
-    let trimmed = text.trim_start_matches(access_code_prefix_char);
-
-    let access_code: String = trimmed
-        .chars()
-        .take_while(|ch| ch.is_ascii_alphanumeric())
-        .collect();
-
-    if access_code.len() == 4 {
-        Some(access_code)
-    } else {
-        None
-    }
-}
-
-fn access_code_prefix_char(ch: char) -> bool {
-    ch.is_whitespace() || matches!(ch, '：' | ':' | '(' | '（' | ')' | '）')
 }
 
 fn res_code_label(res_code: &ApiResCode) -> &'static str {
@@ -537,6 +440,8 @@ struct ShareInfoResponse {
     file_id: String,
     #[serde(rename = "isFolder", default)]
     is_folder: Option<bool>,
+    #[serde(rename = "shareId", default)]
+    share_id: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -607,7 +512,10 @@ mod tests {
     ) -> CheckResult {
         let response: ShareInfoResponse = serde_json::from_str(body).unwrap();
         let mut metadata = base_metadata(share_code, access_code);
-        metadata.insert("api_res_code".to_string(), json!(response.res_code.as_value()));
+        metadata.insert(
+            "api_res_code".to_string(),
+            json!(response.res_code.as_value()),
+        );
         metadata.insert(
             "api_res_code_label".to_string(),
             json!(res_code_label(&response.res_code)),
@@ -615,6 +523,10 @@ mod tests {
 
         if let Some(need_access_code) = response.need_access_code {
             metadata.insert("need_access_code".to_string(), json!(need_access_code));
+        }
+
+        if let Some(share_id) = response.share_id {
+            metadata.insert("share_id".to_string(), json!(share_id));
         }
 
         let normalized_url = normalize_share_url(share_code, access_code);
@@ -658,9 +570,24 @@ mod tests {
     }
 
     #[test]
+    fn extracts_share_code_from_h5_fragment_route() {
+        let url = Url::parse("https://h5.cloud.189.cn/share.html#/t/jYRVb2rmuaIr").unwrap();
+
+        assert_eq!(extract_share_code(&url).as_deref(), Some("jYRVb2rmuaIr"));
+    }
+
+    #[test]
+    fn extracts_access_code_from_h5_fragment_route_query() {
+        let url = Url::parse("https://h5.cloud.189.cn/share.html#/t/yYvIvyVfY7rm?accessCode=1hit")
+            .unwrap();
+
+        assert_eq!(extract_share_code(&url).as_deref(), Some("yYvIvyVfY7rm"));
+        assert_eq!(extract_access_code(&url).as_deref(), Some("1hit"));
+    }
+
+    #[test]
     fn extracts_share_code_from_web_share_query() {
-        let url =
-            Url::parse("https://cloud.189.cn/web/share?code=nIB7Fr6Nn2ua").unwrap();
+        let url = Url::parse("https://cloud.189.cn/web/share?code=nIB7Fr6Nn2ua").unwrap();
 
         assert_eq!(extract_share_code(&url).as_deref(), Some("nIB7Fr6Nn2ua"));
     }
@@ -722,7 +649,10 @@ mod tests {
 
         assert_eq!(result.status, CheckStatus::Invalid);
         assert_eq!(result.reason, "share_not_found");
-        assert_eq!(result.metadata["api_res_code_label"], json!("share_not_found"));
+        assert_eq!(
+            result.metadata["api_res_code_label"],
+            json!("share_not_found")
+        );
     }
 
     #[test]
@@ -760,6 +690,27 @@ mod tests {
 
         assert_eq!(result.status, CheckStatus::Invalid);
         assert_eq!(result.reason, "missing_access_code");
+        assert_eq!(result.metadata["need_access_code"], json!(1));
+    }
+
+    #[test]
+    fn marks_share_with_share_id_as_valid_without_access_code() {
+        let result = build_share_info_sync_result(
+            r#"{
+                "res_code": 0,
+                "res_message": "成功",
+                "needAccessCode": 1,
+                "reviewStatus": 1,
+                "shareId": 12505119723464,
+                "fileName": "可直接列目录分享"
+            }"#,
+            "jYRVb2rmuaIr",
+            None,
+        );
+
+        assert_eq!(result.status, CheckStatus::Valid);
+        assert_eq!(result.reason, "share_available");
+        assert_eq!(result.metadata["share_id"], json!(12505119723464_i64));
         assert_eq!(result.metadata["need_access_code"], json!(1));
     }
 
