@@ -11,8 +11,9 @@ use crate::{
     providers::common::{CheckContext, ProviderChecker, basic_http_check, host_is_or_subdomain},
 };
 
-const SHARE_INFO_ENDPOINT: &str = "https://www.123pan.com/gsb/s";
-const RECEIVE_CODE_VERIFY_ENDPOINT: &str = "https://www.123pan.com/gsb/s/share-list";
+const API_BASE_URL: &str = "https://www.123pan.cn";
+const SHARE_INFO_PATH: &str = "/gsb/s";
+const RECEIVE_CODE_VERIFY_PATH: &str = "/gsb/s/share-list";
 const ERRNO_INVALID_RECEIVE_CODE: i64 = 5_103;
 const ERRNO_SHARE_LINK_INACTIVE: i64 = 5_104;
 
@@ -55,12 +56,67 @@ async fn check_share(context: CheckContext, share_key: String, provider: Provide
 
     let normalized_url = url.to_string();
     let receive_code = extract_receive_code(&url);
-    let mut metadata = base_metadata(&share_key, receive_code.as_deref());
-    let share_info_url = format!("{SHARE_INFO_ENDPOINT}/{share_key}");
+    let endpoints = endpoint_candidates(&url);
+    if endpoints.is_empty() {
+        return CheckResult::new(
+            original_url,
+            normalized_url,
+            CheckStatus::Unknown,
+            provider,
+            "api_endpoint_build_failed",
+            base_metadata(&share_key, receive_code.as_deref()),
+        );
+    }
+
+    let mut last_result = None;
+    for endpoints in endpoints {
+        let result = check_share_with_endpoints(
+            client.clone(),
+            original_url.clone(),
+            normalized_url.clone(),
+            provider,
+            &share_key,
+            receive_code.clone(),
+            endpoints,
+        )
+        .await;
+
+        if !should_try_next_endpoint(&result) {
+            return result;
+        }
+
+        last_result = Some(result);
+    }
+
+    last_result.unwrap_or_else(|| {
+        CheckResult::new(
+            original_url,
+            normalized_url,
+            CheckStatus::Unknown,
+            provider,
+            "api_endpoint_build_failed",
+            base_metadata(&share_key, receive_code.as_deref()),
+        )
+    })
+}
+
+async fn check_share_with_endpoints(
+    client: reqwest::Client,
+    original_url: String,
+    normalized_url: String,
+    provider: Provider,
+    share_key: &str,
+    receive_code: Option<String>,
+    endpoints: Pan123ApiEndpoints,
+) -> CheckResult {
+    let mut metadata = base_metadata(share_key, receive_code.as_deref());
+    let share_info_endpoint = endpoints.share_info_endpoint;
+    let receive_code_verify_endpoint = endpoints.receive_code_verify_endpoint;
+    let share_info_url = format!("{share_info_endpoint}/{share_key}");
     metadata.insert("share_info_endpoint".to_string(), json!(share_info_url));
     metadata.insert(
         "receive_code_verify_endpoint".to_string(),
-        json!(RECEIVE_CODE_VERIFY_ENDPOINT),
+        json!(receive_code_verify_endpoint),
     );
 
     match client.get(&share_info_url).send().await {
@@ -79,6 +135,7 @@ async fn check_share(context: CheckContext, share_key: String, provider: Provide
                         provider,
                         metadata,
                         receive_code,
+                        receive_code_verify_endpoint,
                         body,
                     )
                     .await
@@ -119,6 +176,21 @@ async fn check_share(context: CheckContext, share_key: String, provider: Provide
     }
 }
 
+fn should_try_next_endpoint(result: &CheckResult) -> bool {
+    result.status == CheckStatus::Unknown
+        && matches!(
+            result.reason.as_str(),
+            "share_info_timeout"
+                | "share_info_connection_failed"
+                | "share_info_request_failed"
+                | "share_info_parse_failed"
+                | "receive_code_verify_timeout"
+                | "receive_code_verify_connection_failed"
+                | "receive_code_verify_request_failed"
+                | "receive_code_verify_parse_failed"
+        )
+}
+
 async fn build_share_info_result(
     client: reqwest::Client,
     original_url: String,
@@ -126,6 +198,7 @@ async fn build_share_info_result(
     provider: Provider,
     mut metadata: BTreeMap<String, serde_json::Value>,
     receive_code: Option<String>,
+    receive_code_verify_endpoint: String,
     body: Pan123ShareInfoResponse,
 ) -> CheckResult {
     metadata.insert("share_info_code".to_string(), json!(body.info.code));
@@ -168,6 +241,7 @@ async fn build_share_info_result(
                 provider,
                 metadata,
                 receive_code.expect("receive code presence already checked"),
+                &receive_code_verify_endpoint,
                 body.info
                     .data
                     .as_ref()
@@ -192,6 +266,7 @@ async fn verify_receive_code(
     provider: Provider,
     mut metadata: BTreeMap<String, serde_json::Value>,
     receive_code: String,
+    receive_code_verify_endpoint: &str,
     share_key_from_api: &str,
 ) -> CheckResult {
     let share_key = metadata
@@ -200,7 +275,7 @@ async fn verify_receive_code(
         .unwrap_or(share_key_from_api);
 
     let request_url = Url::parse_with_params(
-        RECEIVE_CODE_VERIFY_ENDPOINT,
+        receive_code_verify_endpoint,
         &[("shareKey", share_key), ("SharePwd", receive_code.as_str())],
     )
     .expect("pan123 share list endpoint should always be valid");
@@ -361,6 +436,53 @@ fn extract_receive_code(url: &Url) -> Option<String> {
         .map(|(_, value)| value.into_owned())
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Pan123ApiEndpoints {
+    share_info_endpoint: String,
+    receive_code_verify_endpoint: String,
+}
+
+fn endpoint_candidates(url: &Url) -> Vec<Pan123ApiEndpoints> {
+    let mut endpoints = Vec::new();
+    push_endpoint_candidate(&mut endpoints, API_BASE_URL);
+
+    if let Some(base_url) = build_base_url(url) {
+        push_endpoint_candidate(&mut endpoints, &base_url);
+    }
+
+    endpoints
+}
+
+fn push_endpoint_candidate(endpoints: &mut Vec<Pan123ApiEndpoints>, base_url: &str) {
+    let candidate = Pan123ApiEndpoints {
+        share_info_endpoint: format_endpoint(base_url, SHARE_INFO_PATH),
+        receive_code_verify_endpoint: format_endpoint(base_url, RECEIVE_CODE_VERIFY_PATH),
+    };
+
+    if !endpoints.contains(&candidate) {
+        endpoints.push(candidate);
+    }
+}
+
+fn build_base_url(url: &Url) -> Option<String> {
+    let host = url.host_str()?;
+    let scheme = url.scheme();
+    let port = url
+        .port()
+        .map(|port| format!(":{port}"))
+        .unwrap_or_default();
+
+    Some(format!("{scheme}://{host}{port}"))
+}
+
+fn format_endpoint(base_url: &str, path: &str) -> String {
+    format!(
+        "{}/{}",
+        base_url.trim_end_matches('/'),
+        path.trim_start_matches('/')
+    )
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum ShareInfoDecision {
     Return(CheckStatus, &'static str),
@@ -425,6 +547,15 @@ mod tests {
     }
 
     #[test]
+    fn matches_user_owned_share_123pan_cn_domain() {
+        let checker = Pan123Checker;
+        let url =
+            Url::parse("https://1813278387.share.123pan.cn/123pan/RWJUVv-rIry?pwd=6XEO").unwrap();
+
+        assert!(checker.matches(&url));
+    }
+
+    #[test]
     fn extracts_share_key_from_legacy_and_final_paths() {
         let legacy = Url::parse("https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat").unwrap();
         let final_url =
@@ -442,6 +573,43 @@ mod tests {
         let url = Url::parse("https://www.123865.com/s/IpPUVv-gGKj?pwd=Ocat").unwrap();
 
         assert_eq!(extract_receive_code(&url).as_deref(), Some("Ocat"));
+    }
+
+    #[test]
+    fn builds_api_endpoint_candidates_with_canonical_host_first() {
+        let url =
+            Url::parse("https://1813278387.share.123pan.cn/123pan/RWJUVv-rIry?pwd=6XEO").unwrap();
+        let endpoints = endpoint_candidates(&url);
+
+        assert_eq!(endpoints.len(), 2);
+        assert_eq!(
+            endpoints[0].share_info_endpoint,
+            "https://www.123pan.cn/gsb/s"
+        );
+        assert_eq!(
+            endpoints[0].receive_code_verify_endpoint,
+            "https://www.123pan.cn/gsb/s/share-list"
+        );
+        assert_eq!(
+            endpoints[1].share_info_endpoint,
+            "https://1813278387.share.123pan.cn/gsb/s"
+        );
+        assert_eq!(
+            endpoints[1].receive_code_verify_endpoint,
+            "https://1813278387.share.123pan.cn/gsb/s/share-list"
+        );
+    }
+
+    #[test]
+    fn endpoint_candidates_do_not_repeat_canonical_host() {
+        let url = Url::parse("https://www.123pan.cn/s/RWJUVv-rIry?pwd=6XEO").unwrap();
+        let endpoints = endpoint_candidates(&url);
+
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(
+            endpoints[0].share_info_endpoint,
+            "https://www.123pan.cn/gsb/s"
+        );
     }
 
     #[test]
