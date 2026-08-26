@@ -141,6 +141,14 @@ docker build -t check-pan-link .
 docker run --rm -p 8080:8080 check-pan-link
 ```
 
+GitHub Actions publishes `ghcr.io/my-name-is-alan/check_pan_link` for `v*`
+tags and manual workflow runs:
+
+```bash
+docker pull ghcr.io/my-name-is-alan/check_pan_link:0.1.0
+docker run --rm -p 8080:8080 ghcr.io/my-name-is-alan/check_pan_link:0.1.0
+```
+
 ## Project Structure / 项目结构
 
 ```text
